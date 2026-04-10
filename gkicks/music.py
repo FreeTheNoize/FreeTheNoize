@@ -4,7 +4,7 @@ from .paths import MP3_PATH
 
 
 def start_music():
-    """Inicia pygame.mixer i toca el MP3 en bucle infinit en un thread daemon."""
+    """Start pygame.mixer and loop the background MP3 on a daemon thread."""
     def _run():
         try:
             pygame.mixer.init()
@@ -12,5 +12,5 @@ def start_music():
                 pygame.mixer.music.load(str(MP3_PATH))
                 pygame.mixer.music.play(loops=-1)
         except Exception as e:
-            print(f"[Music] Error: {e}")
+            print(f"[Music] {e}")
     threading.Thread(target=_run, daemon=True).start()

@@ -12,10 +12,13 @@ from ..paths import ICON_PATH, FAVICON_PATH, DEFAULT_OUTPUT
 from ..config import load_config, save_config
 from ..music import start_music
 from ..downloader import SCDL_EXE, FFMPEG_EXE, FFMPEG_ERR
-from ..styles import BG, BG2, FG, FG2, BTN_BG, BTN_HOV, configure_styles, make_button
-from .tabs import create_format_tab, create_metadata_tab, create_filters_tab, create_advanced_tab, create_converter_tab
+from ..styles import BG, BG2, PANEL, FG, FG2, BTN_BG, BTN_HOV, configure_styles, make_button
+from .tabs import (
+    create_format_tab, create_metadata_tab, create_filters_tab,
+    create_advanced_tab, create_converter_tab, create_spectrogram_tab,
+)
 
-# ── DPI Awareness (Windows) ───────────────────────────────────────────────────
+# ── DPI awareness (Windows) ───────────────────────────────────────────────────
 if sys.platform == "win32":
     try:
         import ctypes
@@ -24,12 +27,31 @@ if sys.platform == "win32":
         pass
 
 
+# ── Download-type options per source ──────────────────────────────────────────
+_SC_TYPES = [
+    ("link",      "Link  (track / playlist)"),
+    ("all",       "All + Reposts"),
+    ("tracks",    "Uploaded"),
+    ("favorites", "Likes"),
+    ("comments",  "Commented"),
+    ("playlists", "Playlists"),
+    ("reposts",   "Reposts"),
+]
+
+_YT_TYPES = [
+    ("url",      "Single URL"),
+    ("playlist", "Playlist"),
+    ("channel",  "Channel"),
+]
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("🏴‍☠️GKICKS SoundCloud Downloader🏴‍☠️")
+        self.title("FreeTheNoize — Audio Downloader")
         self.configure(bg=BG)
-        self.resizable(False, False)
+        self.minsize(760, 580)
+        self.resizable(True, True)
         configure_styles(self)
 
         self.state = {}
@@ -39,6 +61,7 @@ class App(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         atexit.register(self._kill_proc)
+
         self._set_icon()
         self._build_header()
         self._build_main()
@@ -47,23 +70,24 @@ class App(tk.Tk):
 
         self._restore_state(cfg)
         self._center()
+        self._on_source_change()   # sync type buttons to initial source
 
         from pathlib import Path
-        self._log(f"scdl: {SCDL_EXE}")
+        self._log(f"scdl:  {SCDL_EXE[-1] if len(SCDL_EXE) > 1 else SCDL_EXE[0]}")
         if FFMPEG_EXE:
             self._log(f"ffmpeg: {Path(FFMPEG_EXE).name}")
         else:
-            self._log(f"Advertència: ffmpeg no detectat — la conversió d'àudio pot fallar."
-                      f"{f' ({FFMPEG_ERR})' if FFMPEG_ERR else ''}")
+            self._log(
+                f"Warning: ffmpeg not detected — audio conversion may fail."
+                f"{f' ({FFMPEG_ERR})' if FFMPEG_ERR else ''}"
+            )
 
         start_music()
         self.after(200, self._apply_initial_mute)
 
-    # ── Icona ──────────────────────────────────────────────────────────────────
+    # ── Icon ───────────────────────────────────────────────────────────────────
 
     def _set_icon(self):
-        # iconphoto amb PNG (funciona a totes les plataformes sense conflictes)
-        # L'icona del taskbar/explorer ve de l'exe embedded (icon= al spec)
         if ICON_PATH.exists():
             try:
                 img = Image.open(ICON_PATH).resize((128, 128), Image.LANCZOS)
@@ -71,7 +95,6 @@ class App(tk.Tk):
                 self.iconphoto(True, self._icon_photo)
             except Exception:
                 pass
-        # .ico per Windows title bar (opcional, si funciona)
         if FAVICON_PATH.exists():
             try:
                 self.iconbitmap(str(FAVICON_PATH))
@@ -87,7 +110,7 @@ class App(tk.Tk):
         y = max(0, (sh - h) // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-    # ── Capçalera + botó Mute ──────────────────────────────────────────────────
+    # ── Header ─────────────────────────────────────────────────────────────────
 
     def _build_header(self):
         hdr = tk.Frame(self, bg=BG2)
@@ -99,7 +122,7 @@ class App(tk.Tk):
             self._logo = ImageTk.PhotoImage(img)
             tk.Label(hdr, image=self._logo, bg=BG2).pack(pady=(14, 6))
         else:
-            tk.Label(hdr, text="GKICKS", font=("Helvetica", 26, "bold"),
+            tk.Label(hdr, text="FreeTheNoize", font=("Helvetica", 26, "bold"),
                      fg=FG, bg=BG2).pack(pady=(12, 4))
 
         tk.Label(hdr, text="CODED BY @quim_d",
@@ -111,11 +134,8 @@ class App(tk.Tk):
             command=self._toggle_mute,
             bg=BTN_BG, fg=FG,
             activebackground=BTN_HOV, activeforeground=FG,
-            relief="flat",
-            font=("Courier", 9, "bold"),
-            padx=10, pady=4,
-            cursor="hand2",
-            bd=0,
+            relief="flat", font=("Courier", 9, "bold"),
+            padx=10, pady=4, cursor="hand2", bd=0,
         )
         self._mute_btn.pack(pady=(0, 8))
 
@@ -137,71 +157,127 @@ class App(tk.Tk):
         cfg["muted"] = self._muted
         save_config(cfg)
 
-    # ── Interfície principal ───────────────────────────────────────────────────
+    # ── Main controls ──────────────────────────────────────────────────────────
 
     def _build_main(self):
         m = ttk.Frame(self, padding=(16, 12))
         m.pack(fill="x")
         m.columnconfigure(1, weight=1)
 
-        ttk.Label(m, text="URL").grid(row=0, column=0, sticky="w", padx=(0, 10))
-        self.state["url"] = tk.StringVar()
-        ttk.Entry(m, textvariable=self.state["url"]).grid(
-            row=0, column=1, sticky="ew", ipady=5)
-        make_button(m, "Enganxar", self._paste).grid(row=0, column=2, padx=(6, 0))
+        # ── Source selector ───────────────────────────────────────────────────
+        ttk.Label(m, text="Source").grid(row=0, column=0, sticky="w", padx=(0, 10))
+        src_frame = ttk.Frame(m)
+        src_frame.grid(row=0, column=1, columnspan=2, sticky="w")
+        self.state["source"] = tk.StringVar(value="soundcloud")
+        for val, label, color in [
+            ("soundcloud", "SoundCloud",      "#ff5500"),
+            ("youtube",    "YouTube",          "#ff0000"),
+            ("ytmusic",    "YouTube Music",    "#ff0080"),
+        ]:
+            ttk.Radiobutton(src_frame, text=label,
+                            variable=self.state["source"], value=val).pack(
+                side="left", padx=(0, 14))
+        self.state["source"].trace_add("write", lambda *_: self._on_source_change())
 
-        ttk.Label(m, text="Destí").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(8, 0))
+        # ── URL ───────────────────────────────────────────────────────────────
+        ttk.Label(m, text="URL").grid(row=1, column=0, sticky="w",
+                                       padx=(0, 10), pady=(8, 0))
+        self.state["url"] = tk.StringVar()
+        self._url_entry = ttk.Entry(m, textvariable=self.state["url"])
+        self._url_entry.grid(row=1, column=1, sticky="ew", ipady=5, pady=(8, 0))
+
+        url_btns = ttk.Frame(m)
+        url_btns.grid(row=1, column=2, padx=(6, 0), pady=(8, 0))
+        make_button(url_btns, "Paste", self._paste).pack(side="left", padx=(0, 4))
+        make_button(url_btns, "Clear",
+                    lambda: self.state["url"].set("")).pack(side="left")
+
+        # ── Destination ───────────────────────────────────────────────────────
+        ttk.Label(m, text="Save to").grid(row=2, column=0, sticky="w",
+                                           padx=(0, 10), pady=(8, 0))
         self.state["dest"] = tk.StringVar(value=DEFAULT_OUTPUT)
         ttk.Entry(m, textvariable=self.state["dest"]).grid(
-            row=1, column=1, sticky="ew", ipady=5, pady=(8, 0))
-        make_button(m, "Triar…", self._browse).grid(row=1, column=2, padx=(6, 0), pady=(8, 0))
+            row=2, column=1, sticky="ew", ipady=5, pady=(8, 0))
+        make_button(m, "Browse…", self._browse).grid(
+            row=2, column=2, padx=(6, 0), pady=(8, 0))
 
-        ttk.Label(m, text="Tipus").grid(row=2, column=0, sticky="nw", padx=(0, 10), pady=(10, 0))
-        tipus = ttk.Frame(m)
-        tipus.grid(row=2, column=1, columnspan=2, sticky="w", pady=(10, 0))
+        # ── Download type ─────────────────────────────────────────────────────
+        ttk.Label(m, text="Type").grid(row=3, column=0, sticky="nw",
+                                        padx=(0, 10), pady=(10, 0))
+        self._type_frame = ttk.Frame(m)
+        self._type_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=(10, 0))
+
         self.state["dl_type"] = tk.StringVar(value="link")
-        for val, label in [
-            ("link",      "Enllaç (pista/llista)"),
-            ("all",       "Tot + Reposts"),
-            ("tracks",    "Pujades"),
-            ("favorites", "Likes"),
-            ("comments",  "Comentats"),
-            ("playlists", "Llistes"),
-            ("reposts",   "Reposts"),
-        ]:
-            ttk.Radiobutton(tipus, text=label,
-                            variable=self.state["dl_type"], value=val).pack(
-                side="left", padx=(0, 10))
+        self._type_btns: list[ttk.Radiobutton] = []
 
-        self.dl_btn = make_button(m, "   Descarregar   ", self._start_download, large=True)
-        self.dl_btn.grid(row=3, column=0, columnspan=3, pady=(14, 0))
+        # Download button
+        self.dl_btn = make_button(m, "   Download   ", self._start_download, large=True)
+        self.dl_btn.grid(row=4, column=0, columnspan=3, pady=(14, 0))
+
+    def _on_source_change(self):
+        """Rebuild download-type radio buttons based on selected source."""
+        for btn in self._type_btns:
+            btn.destroy()
+        self._type_btns.clear()
+
+        source  = self.state["source"].get()
+        options = _SC_TYPES if source == "soundcloud" else _YT_TYPES
+        default = options[0][0]
+
+        current = self.state["dl_type"].get()
+        if current not in [v for v, _ in options]:
+            self.state["dl_type"].set(default)
+
+        for val, label in options:
+            btn = ttk.Radiobutton(self._type_frame, text=label,
+                                  variable=self.state["dl_type"], value=val)
+            btn.pack(side="left", padx=(0, 10))
+            self._type_btns.append(btn)
+
+        # Update URL placeholder hint
+        hints = {
+            "soundcloud": "https://soundcloud.com/…",
+            "youtube":    "https://www.youtube.com/…",
+            "ytmusic":    "https://music.youtube.com/…",
+        }
+        self._url_entry.configure(
+            style="TEntry"   # reset; placeholder via tooltip would need extra lib
+        )
+
+    # ── Tabs ───────────────────────────────────────────────────────────────────
 
     def _build_tabs(self):
         nb = ttk.Notebook(self)
-        nb.pack(fill="x", padx=16, pady=(10, 0))
-        nb.add(create_format_tab(nb,    self.state),                          text="  Format  ")
-        nb.add(create_metadata_tab(nb,  self.state),                          text="  Metadades  ")
-        nb.add(create_filters_tab(nb,   self.state),                          text="  Filtres  ")
-        nb.add(create_advanced_tab(nb,  self.state),                          text="  Avançat  ")
-        nb.add(create_converter_tab(nb, self.state, self._start_conversion, self._start_embed_art),  text="  Convertidor  ")
+        nb.pack(fill="both", expand=False, padx=16, pady=(10, 0))
+        nb.add(create_format_tab(nb,     self.state),                                   text="  Format  ")
+        nb.add(create_metadata_tab(nb,   self.state),                                   text="  Metadata  ")
+        nb.add(create_filters_tab(nb,    self.state),                                   text="  Filters  ")
+        nb.add(create_advanced_tab(nb,   self.state),                                   text="  Advanced  ")
+        nb.add(create_converter_tab(nb,  self.state, self._start_conversion,
+                                    self._start_embed_art),                             text="  Converter  ")
+        nb.add(create_spectrogram_tab(nb, self.state),                                  text="  Spectrogram  ")
+
+    # ── Log ────────────────────────────────────────────────────────────────────
 
     def _build_log(self):
         log_frame = ttk.Frame(self)
         log_frame.pack(fill="both", expand=True, padx=16, pady=(10, 0))
+        log_frame.rowconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
 
         self.log_widget = scrolledtext.ScrolledText(
             log_frame,
-            height=6,
-            bg="#080808",
-            fg="#c8c8c8",
+            height=7,
+            bg="#080808", fg="#c8c8c8",
             font=("Courier", 9),
             relief="flat",
             state="disabled",
             wrap="word",
             insertbackground=FG,
         )
-        self.log_widget.pack(fill="both", expand=True)
+        self.log_widget.grid(row=0, column=0, sticky="nsew")
 
+        # Status bar
         self.status_var = tk.StringVar(value="Ready")
         tk.Label(self, textvariable=self.status_var,
                  bg=BG2, fg=FG2, font=("Helvetica", 9),
@@ -209,8 +285,8 @@ class App(tk.Tk):
 
         tk.Label(
             self,
-            text="Si no et funciona te jodes a mi em va   - Quim",
-            bg=BG, fg="#3a3a3a",
+            text="If it doesn't work it's not my problem   – Quim",
+            bg=BG, fg="#2e2e2e",
             font=("Courier", 8, "italic"),
             anchor="center",
         ).pack(fill="x", pady=(2, 6))
@@ -228,16 +304,16 @@ class App(tk.Tk):
         if d:
             self.state["dest"].set(d)
 
-    def _log(self, text):
+    def _log(self, text: str):
         self.log_widget.configure(state="normal")
         self.log_widget.insert("end", text + "\n")
         self.log_widget.see("end")
         self.log_widget.configure(state="disabled")
 
-    # ── Construcció de la comanda ──────────────────────────────────────────────
+    # ── Build scdl command ────────────────────────────────────────────────────
 
-    def _build_cmd(self):
-        s = self.state
+    def _build_scdl_cmd(self):
+        s    = self.state
         url  = s["url"].get().strip()
         dest = s["dest"].get().strip()
         cmd  = SCDL_EXE + ["--path", dest]
@@ -251,11 +327,9 @@ class App(tk.Tk):
         elif t == "playlists": cmd += ["-l", url, "-p"]
         elif t == "reposts":   cmd += ["-l", url, "-r"]
 
-        fmt   = s["fmt"].get()
-        # shlex.split (usat per scdl internament) tracta backslashes com a escape
-        # i trenca paths amb espais → forward slashes + cometes dobles al voltant
+        fmt    = s["fmt"].get()
         _ffmpeg = FFMPEG_EXE.replace("\\", "/") if FFMPEG_EXE else None
-        ytdlp = ["--ffmpeg-location", f'"{_ffmpeg}"'] if _ffmpeg else []
+        ytdlp  = ["--ffmpeg-location", f'"{_ffmpeg}"'] if _ffmpeg else []
 
         if fmt == "onlymp3":
             cmd.append("--onlymp3")
@@ -307,96 +381,106 @@ class App(tk.Tk):
 
         return cmd, url, dest
 
-    # ── Descàrrega ────────────────────────────────────────────────────────────
+    # ── Download ──────────────────────────────────────────────────────────────
 
     def _start_download(self):
-        if not self.state["url"].get().strip():
-            self.status_var.set("Introdueix una URL primer.")
+        url  = self.state["url"].get().strip()
+        dest = self.state["dest"].get().strip()
+        if not url:
+            self.status_var.set("Enter a URL first.")
             return
-        if not self.state["dest"].get().strip():
-            self.status_var.set("Tria una carpeta de destí.")
+        if not dest:
+            self.status_var.set("Choose a destination folder.")
             return
 
-        self.dl_btn.configure(state="disabled", text="   Descarregant…   ")
-        self.status_var.set("Descarregant…")
+        source = self.state["source"].get()
+        self.dl_btn.configure(state="disabled", text="   Downloading…   ")
+        self.status_var.set("Downloading…")
 
-        cmd, _, _ = self._build_cmd()
-        self.after(0, self._log, "$ " + " ".join(cmd) + "\n")
+        if source == "soundcloud":
+            cmd, _, _ = self._build_scdl_cmd()
+            self._log("$ " + " ".join(cmd) + "\n")
+            from ..downloader import run_download
+            run_download(
+                cmd,
+                on_line=lambda line: self.after(0, self._log, line),
+                on_done=lambda msg:  self.after(0, self._finish, msg),
+                on_proc=lambda p:    setattr(self, "_proc", p),
+            )
+        else:
+            from ..youtube import build_ytdlp_cmd, run_ytdlp
+            cmd = build_ytdlp_cmd(self.state)
+            self._log("$ " + " ".join(str(x) for x in cmd) + "\n")
+            run_ytdlp(
+                cmd,
+                on_line=lambda line: self.after(0, self._log, line),
+                on_done=lambda msg:  self.after(0, self._finish, msg),
+                on_proc=lambda p:    setattr(self, "_proc", p),
+            )
 
-        from ..downloader import run_download
-        run_download(
-            cmd,
-            on_line=lambda line: self.after(0, self._log, line),
-            on_done=lambda msg: self.after(0, self._finish, msg),
-            on_proc=lambda p: setattr(self, "_proc", p),
-        )
-
-    def _finish(self, msg):
+    def _finish(self, msg: str):
         self._log(f"\n{msg}")
         self.status_var.set(msg)
-        self.dl_btn.configure(state="normal", text="   Descarregar   ")
+        self.dl_btn.configure(state="normal", text="   Download   ")
 
-    # ── Convertidor ───────────────────────────────────────────────────────────
+    # ── Converter ─────────────────────────────────────────────────────────────
 
     def _start_conversion(self, files: list):
         if not files:
-            self.status_var.set("Afegeix almenys un fitxer.")
+            self.status_var.set("Add at least one file.")
             return
-
-        s = self.state
+        s       = self.state
         out_dir = None if s["conv_same_dir"].get() else (s["conv_out_dir"].get().strip() or None)
         fmt     = s["conv_fmt"].get()
         quality = s["conv_mp3_quality"].get()
 
         btn = s.get("_conv_btn")
         if btn:
-            btn.configure(state="disabled", text="   Convertint…   ")
-        self.status_var.set("Convertint…")
-        self._log(f"\nConvertint {len(files)} fitxer(s) → {fmt.upper()}")
+            btn.configure(state="disabled", text="   Converting…   ")
+        self.status_var.set("Converting…")
+        self._log(f"\nConverting {len(files)} file(s) → {fmt.upper()}")
 
         from ..converter import run_conversion
         run_conversion(
             files, out_dir, fmt, quality,
             on_line=lambda line: self.after(0, self._log, line),
-            on_done=lambda msg: self.after(0, self._finish_conversion, msg),
+            on_done=lambda msg:  self.after(0, self._finish_conversion, msg),
         )
 
-    def _finish_conversion(self, msg):
+    def _finish_conversion(self, msg: str):
         self._log(f"\n{msg}")
         self.status_var.set(msg)
         btn = self.state.get("_conv_btn")
         if btn:
-            btn.configure(state="normal", text="   Convertir   ")
+            btn.configure(state="normal", text="   Convert   ")
 
-    # ── Incrustar portada ─────────────────────────────────────────────────────
+    # ── Embed cover art ───────────────────────────────────────────────────────
 
     def _start_embed_art(self, files: list, image_path: str | None):
         if not files:
-            self.status_var.set("Afegeix almenys un fitxer.")
+            self.status_var.set("Add at least one file.")
             return
-
         btn = self.state.get("_embed_btn")
         if btn:
-            btn.configure(state="disabled", text="   Incrustant…   ")
-        self.status_var.set("Incrustant portada…")
-        self._log(f"\nIncrustant portada a {len(files)} fitxer(s)")
+            btn.configure(state="disabled", text="   Embedding…   ")
+        self.status_var.set("Embedding cover art…")
+        self._log(f"\nEmbedding cover art in {len(files)} file(s)")
 
         from ..converter import embed_cover_art
         embed_cover_art(
-            files,
-            image_path or None,
+            files, image_path or None,
             on_line=lambda line: self.after(0, self._log, line),
-            on_done=lambda msg: self.after(0, self._finish_embed_art, msg),
+            on_done=lambda msg:  self.after(0, self._finish_embed_art, msg),
         )
 
-    def _finish_embed_art(self, msg):
+    def _finish_embed_art(self, msg: str):
         self._log(f"\n{msg}")
         self.status_var.set(msg)
         btn = self.state.get("_embed_btn")
         if btn:
-            btn.configure(state="normal", text="   Incrustar portada   ")
+            btn.configure(state="normal", text="   Embed Cover Art   ")
 
-    # ── Matar procés ──────────────────────────────────────────────────────────
+    # ── Kill process ──────────────────────────────────────────────────────────
 
     def _kill_proc(self):
         proc = self._proc
@@ -418,12 +502,12 @@ class App(tk.Tk):
                 pass
         self._proc = None
 
-    # ── Persistir estat UI ────────────────────────────────────────────────────
+    # ── Persist UI state ──────────────────────────────────────────────────────
 
     def _save_state(self):
         cfg = load_config()
         cfg["estat"] = {k: v.get() for k, v in self.state.items()
-                        if hasattr(v, "get")}
+                        if hasattr(v, "get") and not k.startswith("_")}
         save_config(cfg)
 
     def _restore_state(self, cfg: dict):

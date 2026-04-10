@@ -12,19 +12,19 @@ def create_format_tab(nb, state):
     f.columnconfigure(1, weight=1)
     f.columnconfigure(2, weight=1)
 
-    ttk.Label(f, text="FORMAT D'ÀUDIO", font=("Helvetica", 8),
+    ttk.Label(f, text="AUDIO FORMAT", font=("Helvetica", 8),
               foreground=FG2).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
     state["fmt"] = tk.StringVar(value="default")
     options = [
         ("default",       "Original  (m4a / opus)"),
         ("onlymp3",       "MP3"),
-        ("wav",           "WAV  —  màxima qualitat per a DAW"),
-        ("flac",          "FLAC  (si la càrrega és lossless)"),
+        ("wav",           "WAV  —  lossless for DAWs"),
+        ("flac",          "FLAC  (if source is lossless)"),
         ("alac",          "ALAC  —  Apple Lossless"),
-        ("opus",          "Preferir Opus"),
-        ("no_original",   "Sense original  →  mp3 / m4a / opus"),
-        ("only_original", "Només originals  (WAV, FLAC, AIFF…)"),
+        ("opus",          "Prefer Opus"),
+        ("no_original",   "No original  →  mp3 / m4a / opus"),
+        ("only_original", "Originals only  (WAV, FLAC, AIFF…)"),
     ]
     for i, (val, label) in enumerate(options):
         ttk.Radiobutton(f, text=label,
@@ -33,10 +33,15 @@ def create_format_tab(nb, state):
 
     mp3_frame = ttk.Frame(f)
     mp3_frame.grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
-    ttk.Label(mp3_frame, text="Bitrate MP3:", foreground=FG2).pack(side="left", padx=(0, 8))
+    ttk.Label(mp3_frame, text="MP3 bitrate:", foreground=FG2).pack(side="left", padx=(0, 8))
     state["mp3_quality"] = tk.StringVar(value="0")
-    for val, label in [("0", "VBR máx"), ("320K", "320 kbps"), ("256K", "256 kbps"),
-                       ("192K", "192 kbps"), ("128K", "128 kbps")]:
+    for val, label in [
+        ("0",    "VBR max"),
+        ("320K", "320 kbps"),
+        ("256K", "256 kbps"),
+        ("192K", "192 kbps"),
+        ("128K", "128 kbps"),
+    ]:
         ttk.Radiobutton(mp3_frame, text=label,
                         variable=state["mp3_quality"], value=val).pack(side="left", padx=(0, 10))
 
@@ -50,7 +55,7 @@ def create_format_tab(nb, state):
     mp3_frame.grid_remove()
 
     sep(f, row=5, cols=3)
-    ttk.Label(f, text="PORTADA / ARTWORK", font=("Helvetica", 8),
+    ttk.Label(f, text="ARTWORK", font=("Helvetica", 8),
               foreground=FG2).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
     state["original_art"]    = tk.BooleanVar()
@@ -58,37 +63,37 @@ def create_format_tab(nb, state):
     state["write_thumbnail"] = tk.BooleanVar()
 
     ttk.Checkbutton(f,
-        text="Empaquetar portada al fitxer  (recomanat — visible en DAW i reproductors)",
+        text="Embed cover art into file  (recommended — visible in DAWs and players)",
         variable=state["embed_thumbnail"]).grid(row=7, column=0, columnspan=3, sticky="w", pady=1)
     ttk.Checkbutton(f,
-        text="Guardar portada com a fitxer PNG separat  (útil per a carpetes de samples)",
+        text="Save cover as a separate PNG file  (useful for sample folders)",
         variable=state["write_thumbnail"]).grid(row=8, column=0, columnspan=3, sticky="w", pady=1)
     ttk.Checkbutton(f,
-        text="Portada en resolució original de SoundCloud  (sense retallar a 500x500)",
+        text="Original SoundCloud artwork resolution  (no crop to 500×500)",
         variable=state["original_art"]).grid(row=9, column=0, columnspan=3, sticky="w", pady=1)
 
     return f
 
 
-# ── Metadades ─────────────────────────────────────────────────────────────────
+# ── Metadata ──────────────────────────────────────────────────────────────────
 
 def create_metadata_tab(nb, state):
     f = ttk.Frame(nb, padding=(14, 10))
     f.columnconfigure(0, weight=1)
 
-    ttk.Label(f, text="ETIQUETES (TAGS)", font=("Helvetica", 8),
+    ttk.Label(f, text="TAGS", font=("Helvetica", 8),
               foreground=FG2).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
     bool_opts = [
-        ("embed_metadata",  "Incrustar metadades completes  (títol, artista, data, BPM, gènere…)"),
-        ("extract_artist",  "Extreure nom d'artista del títol  (en comptes de l'usuari de SC)"),
-        ("original_meta",   "No modificar metadades originals del fitxer"),
-        ("original_name",   "No modificar nom de fitxer original"),
-        ("force_meta",      "Forçar escriptura de metadades encara que el fitxer ja existeixi"),
-        ("no_album_tag",    "No afegir etiqueta d'àlbum  (evita portades compartides en alguns reproductors)"),
-        ("add_description", "Desar descripció de la pista en un fitxer .txt separat"),
-        ("addtofile",       "Afegir l'artista al nom del fitxer si no hi és"),
-        ("addtimestamp",    "Afegir marca de temps (timestamp) de pujada al nom"),
+        ("embed_metadata",  "Embed full metadata  (title, artist, date, BPM, genre…)"),
+        ("extract_artist",  "Extract artist from track title  (instead of SC username)"),
+        ("original_meta",   "Do not modify original file metadata"),
+        ("original_name",   "Do not modify original filename"),
+        ("force_meta",      "Force metadata write even if file already exists"),
+        ("no_album_tag",    "Skip album tag  (avoids shared covers in some players)"),
+        ("add_description", "Save track description to a separate .txt file"),
+        ("addtofile",       "Append artist to filename if missing"),
+        ("addtimestamp",    "Append upload timestamp to filename"),
     ]
     for i, (key, label) in enumerate(bool_opts):
         state[key] = tk.BooleanVar()
@@ -98,14 +103,14 @@ def create_metadata_tab(nb, state):
     sep(f, row=1 + len(bool_opts), pady=8)
     base = 2 + len(bool_opts)
 
-    ttk.Label(f, text="FORMAT DE NOM  (variables: %title%, %artist%, %year%, %playlist%…)",
+    ttk.Label(f, text="NAME FORMAT  (variables: %title%, %artist%, %year%, %playlist%…)",
               font=("Helvetica", 8), foreground=FG2).grid(
         row=base, column=0, sticky="w", pady=(0, 2))
     state["name_fmt"] = tk.StringVar()
     ttk.Entry(f, textvariable=state["name_fmt"]).grid(
         row=base + 1, column=0, sticky="ew", ipady=4, pady=(0, 8))
 
-    ttk.Label(f, text="FORMAT DE NOM EN PLAYLIST",
+    ttk.Label(f, text="PLAYLIST NAME FORMAT",
               font=("Helvetica", 8), foreground=FG2).grid(
         row=base + 2, column=0, sticky="w", pady=(0, 2))
     state["pl_name_fmt"] = tk.StringVar()
@@ -115,29 +120,29 @@ def create_metadata_tab(nb, state):
     return f
 
 
-# ── Filtres ───────────────────────────────────────────────────────────────────
+# ── Filters ───────────────────────────────────────────────────────────────────
 
 def create_filters_tab(nb, state):
     f = ttk.Frame(nb, padding=(14, 10))
     f.columnconfigure(1, weight=1)
     f.columnconfigure(3, weight=1)
 
-    ttk.Label(f, text="MIDA I OFFSET", font=("Helvetica", 8),
+    ttk.Label(f, text="SIZE & OFFSET", font=("Helvetica", 8),
               foreground=FG2).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
-    ttk.Label(f, text="Mida mínima  (ex: 1m, 500k)").grid(
+    ttk.Label(f, text="Min size  (e.g. 1m, 500k)").grid(
         row=1, column=0, sticky="w", padx=(0, 8))
     state["min_size"] = tk.StringVar()
     ttk.Entry(f, textvariable=state["min_size"], width=10).grid(
         row=1, column=1, sticky="w", ipady=3)
 
-    ttk.Label(f, text="Mida màxima").grid(
+    ttk.Label(f, text="Max size").grid(
         row=1, column=2, sticky="w", padx=(16, 8))
     state["max_size"] = tk.StringVar()
     ttk.Entry(f, textvariable=state["max_size"], width=10).grid(
         row=1, column=3, sticky="w", ipady=3)
 
-    ttk.Label(f, text="Començar des de la pista nº").grid(
+    ttk.Label(f, text="Start from track #").grid(
         row=2, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
     state["offset"] = tk.StringVar()
     ttk.Entry(f, textvariable=state["offset"], width=6).grid(
@@ -145,15 +150,15 @@ def create_filters_tab(nb, state):
 
     sep(f, row=3, cols=4)
 
-    ttk.Label(f, text="COMPORTAMENT", font=("Helvetica", 8),
+    ttk.Label(f, text="BEHAVIOR", font=("Helvetica", 8),
               foreground=FG2).grid(row=4, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
     bool_opts = [
-        ("continue_dl",     "Continuar sense tornar a descarregar si el fitxer ja existeix"),
-        ("overwrite",       "Sobreescriure fitxers existents"),
-        ("no_playlist",     "Ignorar llistes (playlists) al descarregar un perfil"),
-        ("no_pl_folder",    "No crear subcarpeta per a la llista  (tot a l'arrel)"),
-        ("strict_playlist", "Avortar tota la llista si falla una pista"),
+        ("continue_dl",     "Skip file if it already exists  (no re-download)"),
+        ("overwrite",       "Overwrite existing files"),
+        ("no_playlist",     "Ignore playlists when downloading a profile"),
+        ("no_pl_folder",    "No subfolder for playlist  (all files in root)"),
+        ("strict_playlist", "Abort entire playlist if one track fails"),
     ]
     for i, (key, label) in enumerate(bool_opts):
         state[key] = tk.BooleanVar()
@@ -163,7 +168,7 @@ def create_filters_tab(nb, state):
     sep(f, row=5 + len(bool_opts), cols=4)
     base = 6 + len(bool_opts)
 
-    ttk.Label(f, text="FITXER D'HISTORIAL  (--download-archive)",
+    ttk.Label(f, text="DOWNLOAD ARCHIVE  (--download-archive)",
               font=("Helvetica", 8), foreground=FG2).grid(
         row=base, column=0, columnspan=4, sticky="w", pady=(0, 2))
 
@@ -176,7 +181,7 @@ def create_filters_tab(nb, state):
     make_button(archive_row, "…", lambda: _pick_file(state["dl_archive"])).grid(
         row=0, column=1, padx=(4, 0))
 
-    ttk.Label(f, text="FITXER DE SINCRONITZACIÓ  (--sync)",
+    ttk.Label(f, text="SYNC FILE  (--sync)",
               font=("Helvetica", 8), foreground=FG2).grid(
         row=base + 2, column=0, columnspan=4, sticky="w", pady=(0, 2))
 
@@ -199,13 +204,13 @@ def _pick_file(var):
         var.set(p)
 
 
-# ── Avançat ───────────────────────────────────────────────────────────────────
+# ── Advanced ──────────────────────────────────────────────────────────────────
 
 def create_advanced_tab(nb, state):
     f = ttk.Frame(nb, padding=(14, 10))
     f.columnconfigure(1, weight=1)
 
-    ttk.Label(f, text="AUTENTICACIÓ", font=("Helvetica", 8),
+    ttk.Label(f, text="AUTHENTICATION  (SoundCloud)", font=("Helvetica", 8),
               foreground=FG2).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
     state["client_id"]  = tk.StringVar()
@@ -219,7 +224,7 @@ def create_advanced_tab(nb, state):
 
     ttk.Label(f, text="YT-DLP", font=("Helvetica", 8),
               foreground=FG2).grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 4))
-    ttk.Label(f, text="Args extres per a yt-dlp").grid(
+    ttk.Label(f, text="Extra yt-dlp arguments").grid(
         row=5, column=0, sticky="w", padx=(0, 10))
     state["ytdlp_args"] = tk.StringVar()
     ttk.Entry(f, textvariable=state["ytdlp_args"]).grid(
@@ -227,14 +232,14 @@ def create_advanced_tab(nb, state):
 
     sep(f, row=6, cols=2)
 
-    ttk.Label(f, text="REGISTRE (LOG)", font=("Helvetica", 8),
+    ttk.Label(f, text="LOGGING", font=("Helvetica", 8),
               foreground=FG2).grid(row=7, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
     bool_opts = [
-        ("log_debug",      "Depuració (Debug — log molt detallat)"),
-        ("log_error",      "Només errors"),
-        ("hidewarnings",   "Ocultar advertències"),
-        ("hide_progress",  "Ocultar barra de progrés"),
+        ("log_debug",     "Debug  (very verbose log)"),
+        ("log_error",     "Errors only"),
+        ("hidewarnings",  "Hide warnings"),
+        ("hide_progress", "Hide progress bar"),
     ]
     for i, (key, label) in enumerate(bool_opts):
         state[key] = tk.BooleanVar()
@@ -244,14 +249,14 @@ def create_advanced_tab(nb, state):
     return f
 
 
-# ── Convertidor ───────────────────────────────────────────────────────────────
+# ── Converter ─────────────────────────────────────────────────────────────────
 
 def create_converter_tab(nb, state, on_convert, on_embed_art):
     f = ttk.Frame(nb, padding=(14, 10))
     f.columnconfigure(0, weight=1)
 
-    # ── Fitxers d'entrada ──────────────────────────────────────────────────────
-    ttk.Label(f, text="FITXERS D'ENTRADA", font=("Helvetica", 8),
+    # ── Input files ───────────────────────────────────────────────────────────
+    ttk.Label(f, text="INPUT FILES", font=("Helvetica", 8),
               foreground=FG2).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
     files_frame = ttk.Frame(f)
@@ -272,7 +277,7 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
     _files: list[str] = []
 
     def _add_files():
-        paths = filedialog.askopenfilenames(title="Selecciona fitxers")
+        paths = filedialog.askopenfilenames(title="Select files")
         for p in paths:
             if p not in _files:
                 _files.append(p)
@@ -287,14 +292,14 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
         lb.delete(0, "end")
         _files.clear()
 
-    make_button(btn_col, "Afegir…", _add_files).pack(fill="x", pady=(0, 4))
-    make_button(btn_col, "Treure",   _remove_sel).pack(fill="x", pady=(0, 4))
-    make_button(btn_col, "Netejar",  _clear).pack(fill="x")
+    make_button(btn_col, "Add…",   _add_files).pack(fill="x", pady=(0, 4))
+    make_button(btn_col, "Remove", _remove_sel).pack(fill="x", pady=(0, 4))
+    make_button(btn_col, "Clear",  _clear).pack(fill="x")
 
     sep(f, row=2, cols=1)
 
-    # ── Carpeta de sortida ─────────────────────────────────────────────────────
-    ttk.Label(f, text="CARPETA DE SORTIDA", font=("Helvetica", 8),
+    # ── Output folder ─────────────────────────────────────────────────────────
+    ttk.Label(f, text="OUTPUT FOLDER", font=("Helvetica", 8),
               foreground=FG2).grid(row=3, column=0, sticky="w", pady=(0, 4))
 
     out_row = ttk.Frame(f)
@@ -311,26 +316,23 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
             state["conv_out_dir"].set(d)
             state["conv_same_dir"].set(False)
 
-    make_button(out_row, "Triar…", _browse_out).grid(row=0, column=1, padx=(6, 0))
+    make_button(out_row, "Browse…", _browse_out).grid(row=0, column=1, padx=(6, 0))
 
     state["conv_same_dir"] = tk.BooleanVar(value=True)
 
     def _toggle_same(*_):
-        if state["conv_same_dir"].get():
-            out_entry.configure(state="disabled")
-        else:
-            out_entry.configure(state="normal")
+        out_entry.configure(state="disabled" if state["conv_same_dir"].get() else "normal")
 
     state["conv_same_dir"].trace_add("write", _toggle_same)
-    ttk.Checkbutton(f, text="Mateixa carpeta que l'entrada",
+    ttk.Checkbutton(f, text="Same folder as input",
                     variable=state["conv_same_dir"]).grid(
         row=5, column=0, sticky="w", pady=(2, 0))
     _toggle_same()
 
     sep(f, row=6, cols=1)
 
-    # ── Format de sortida ──────────────────────────────────────────────────────
-    ttk.Label(f, text="FORMAT DE SORTIDA", font=("Helvetica", 8),
+    # ── Output format ─────────────────────────────────────────────────────────
+    ttk.Label(f, text="OUTPUT FORMAT", font=("Helvetica", 8),
               foreground=FG2).grid(row=7, column=0, sticky="w", pady=(0, 6))
 
     fmt_frame = ttk.Frame(f)
@@ -343,10 +345,15 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
 
     mp3_q_frame = ttk.Frame(f)
     mp3_q_frame.grid(row=9, column=0, sticky="w", pady=(6, 0))
-    ttk.Label(mp3_q_frame, text="Qualitat MP3:", foreground=FG2).pack(side="left", padx=(0, 8))
+    ttk.Label(mp3_q_frame, text="MP3 quality:", foreground=FG2).pack(side="left", padx=(0, 8))
     state["conv_mp3_quality"] = tk.StringVar(value="0")
-    for val, label in [("0", "VBR màx"), ("320k", "320 kbps"),
-                       ("256k", "256 kbps"), ("192k", "192 kbps"), ("128k", "128 kbps")]:
+    for val, label in [
+        ("0",    "VBR max"),
+        ("320k", "320 kbps"),
+        ("256k", "256 kbps"),
+        ("192k", "192 kbps"),
+        ("128k", "128 kbps"),
+    ]:
         ttk.Radiobutton(mp3_q_frame, text=label,
                         variable=state["conv_mp3_quality"], value=val).pack(
             side="left", padx=(0, 8))
@@ -361,21 +368,20 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
 
     sep(f, row=10, cols=1)
 
-    conv_btn = make_button(f, "   Convertir   ",
-                           lambda: on_convert(_files), large=True)
+    conv_btn = make_button(f, "   Convert   ", lambda: on_convert(_files), large=True)
     conv_btn.grid(row=11, column=0, pady=(4, 0))
     state["_conv_btn"] = conv_btn
 
-    # ── Incrustar portada ──────────────────────────────────────────────────────
+    # ── Embed cover art ───────────────────────────────────────────────────────
     sep(f, row=12, cols=1)
 
-    ttk.Label(f, text="INCRUSTAR PORTADA  (WAV · MP3 · FLAC · M4A)",
+    ttk.Label(f, text="EMBED COVER ART  (WAV · MP3 · FLAC · M4A)",
               font=("Helvetica", 8), foreground=FG2).grid(
-        row=13, column=0, sticky="w", pady=(0, 6))
+        row=13, column=0, sticky="w", pady=(0, 4))
 
     ttk.Label(
         f,
-        text="Incrusta la portada directament al fitxer d'àudio (compatible Traktor · Rekordbox · VirtualDJ)",
+        text="Embeds artwork directly into the audio file — compatible with Traktor, Rekordbox, VirtualDJ",
         foreground=FG2, font=("Helvetica", 8),
     ).grid(row=14, column=0, sticky="w", pady=(0, 6))
 
@@ -383,10 +389,10 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
     art_radio_frame = ttk.Frame(f)
     art_radio_frame.grid(row=15, column=0, sticky="w", pady=(0, 4))
     ttk.Radiobutton(art_radio_frame,
-                    text="Auto-detectar imatge (cerca .jpg/.png amb el mateix nom del fitxer)",
+                    text="Auto-detect image  (looks for .jpg/.png with same filename)",
                     variable=state["art_mode"], value="auto").pack(anchor="w")
     ttk.Radiobutton(art_radio_frame,
-                    text="Seleccionar imatge manualment (una imatge per a tots els fitxers)",
+                    text="Select image manually  (one image for all files)",
                     variable=state["art_mode"], value="manual").pack(anchor="w")
 
     img_row = ttk.Frame(f)
@@ -398,13 +404,16 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
 
     def _browse_img():
         p = filedialog.askopenfilename(
-            title="Selecciona imatge de portada",
-            filetypes=[("Imatges", "*.jpg *.jpeg *.png *.webp"), ("Tots els fitxers", "*.*")],
+            title="Select cover image",
+            filetypes=[
+                ("Images", "*.jpg *.jpeg *.png *.webp"),
+                ("All files", "*.*"),
+            ],
         )
         if p:
             state["art_image"].set(p)
 
-    make_button(img_row, "Triar…", _browse_img).grid(row=0, column=1, padx=(6, 0))
+    make_button(img_row, "Browse…", _browse_img).grid(row=0, column=1, padx=(6, 0))
 
     def _toggle_img(*_):
         if state["art_mode"].get() == "manual":
@@ -419,8 +428,53 @@ def create_converter_tab(nb, state, on_convert, on_embed_art):
         img = state["art_image"].get().strip() if state["art_mode"].get() == "manual" else None
         on_embed_art(_files, img)
 
-    embed_btn = make_button(f, "   Incrustar portada   ", _do_embed, large=True)
+    embed_btn = make_button(f, "   Embed Cover Art   ", _do_embed, large=True)
     embed_btn.grid(row=17, column=0, pady=(4, 0))
     state["_embed_btn"] = embed_btn
 
     return f
+
+
+# ── Spectrogram ───────────────────────────────────────────────────────────────
+
+def create_spectrogram_tab(nb, state):
+    """Create the spectrogram tab. Imports matplotlib lazily to avoid slowing startup."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    placeholder = ttk.Frame(nb, padding=(14, 10))
+    placeholder.columnconfigure(0, weight=1)
+    placeholder.rowconfigure(1, weight=1)
+
+    status_var = tk.StringVar(value="Loading spectrogram viewer…")
+    ttk.Label(placeholder, textvariable=status_var,
+              foreground=FG2, font=("Helvetica", 9)).grid(
+        row=0, column=0, sticky="w")
+
+    _built = [False]
+
+    def _build():
+        if _built[0]:
+            return
+        _built[0] = True
+        try:
+            from ..spectrogram import create_spectrogram_tab as _create
+            # Replace placeholder contents with the real widget
+            for w in placeholder.winfo_children():
+                w.destroy()
+            inner = _create(placeholder, state)
+            inner.pack(fill="both", expand=True)
+        except ImportError as e:
+            status_var.set(
+                f"Missing dependency: {e}\n"
+                "Install with: pip install numpy scipy matplotlib soundfile"
+            )
+        except Exception as e:
+            status_var.set(f"Error loading spectrogram: {e}")
+
+    # Build lazily when the tab is first shown
+    placeholder.bind("<Visibility>", lambda _: _build())
+    # Also trigger after a short delay as fallback (some platforms skip Visibility)
+    placeholder.after(300, _build)
+
+    return placeholder

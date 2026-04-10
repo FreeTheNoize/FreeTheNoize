@@ -5,14 +5,12 @@ from pathlib import Path
 
 
 def _find_ffmpeg() -> tuple[str | None, str | None, str | None]:
-    """Returns (exe_path, dir_path, error_str)."""
-    # Frozen bundle: ffmpeg.exe is in _MEIPASS root
+    """Return (exe_path, dir_path, error_str)."""
     if getattr(sys, "frozen", False):
         exe = Path(sys._MEIPASS) / "ffmpeg.exe"
         if exe.exists():
             return str(exe), str(exe.parent), None
         return None, None, f"ffmpeg.exe not found in {sys._MEIPASS}"
-    # Dev: use imageio_ffmpeg
     try:
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -44,7 +42,7 @@ def run_download(cmd: list, on_line, on_done, on_proc=None):
     import threading
 
     def _worker():
-        msg = "Error desconegut."
+        msg = "Unknown error."
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -60,11 +58,11 @@ def run_download(cmd: list, on_line, on_done, on_proc=None):
             for line in proc.stdout:
                 on_line(line.rstrip())
             proc.wait()
-            msg = ("Descàrrega completada."
+            msg = ("Download completed."
                    if proc.returncode == 0
-                   else f"El procés ha acabat amb el codi {proc.returncode}.")
+                   else f"Process exited with code {proc.returncode}.")
         except FileNotFoundError:
-            msg = "scdl no trobat."
+            msg = "scdl not found."
             on_line(msg)
         except Exception as e:
             msg = f"Error: {e}"
