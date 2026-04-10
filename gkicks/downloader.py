@@ -25,7 +25,7 @@ FFMPEG_EXE, FFMPEG_DIR, FFMPEG_ERR = _find_ffmpeg()
 def get_scdl_cmd() -> list:
     if getattr(sys, "frozen", False):
         return [sys.executable, "___RUN_SCDL___"]
-    return [sys.executable, "-m", "scdl"]
+    return [sys.executable, "-m", "scdl.scdl"]
 
 
 SCDL_EXE = get_scdl_cmd()
