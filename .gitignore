@@ -1,0 +1,31 @@
+# Virtual environments
+.venv/
+.gkicks-venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# PyInstaller build output
+build/
+dist/
+*.spec.bak
+
+# Large binaries (use releases instead)
+assets/ffmpeg.exe
+
+# User-specific config (contains local paths)
+gkicks-config.json
+
+# Editor / tool config
+.claude/
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

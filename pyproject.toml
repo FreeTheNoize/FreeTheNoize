@@ -1,0 +1,23 @@
+[project]
+name = "gkicks-scdl"
+version = "1.0.0"
+description = "GUI para descargar tracks de SoundCloud"
+requires-python = ">=3.10"
+dependencies = [
+    "scdl>=3.0.4",
+    "Pillow>=10.0.0",
+    "imageio-ffmpeg>=0.5.0",
+    "pygame-ce>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+gkicks-scdl = "app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
