@@ -1,25 +1,19 @@
 # Virtual environments
 .venv/
-.gkicks-venv/
 venv/
 
-# Python cache
+# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
+*.egg-info/
+.pytest_cache/
 
-# PyInstaller build output
+# PyInstaller
 build/
 dist/
-*.spec.bak
 
-# Large binaries (use releases instead)
-assets/ffmpeg.exe
-
-# User-specific config (contains local paths)
-gkicks-config.json
+# Bundled binaries (use releases instead)
+bin/
 
 # Editor / tool config
 .claude/
