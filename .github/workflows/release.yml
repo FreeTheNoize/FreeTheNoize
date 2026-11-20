@@ -18,11 +18,12 @@ jobs:
             artifact: FreeTheNoize-Windows-x64.zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
-      - run: uv pip install --system -e ".[desktop,dev]"
+          activate-environment: true
+      - run: uv pip install -e ".[desktop,dev]"
       - run: pyinstaller packaging/freethenoize.spec --noconfirm
       - name: Zip (macOS)
         if: runner.os == 'macOS'

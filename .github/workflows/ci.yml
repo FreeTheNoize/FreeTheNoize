@@ -12,13 +12,15 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
+          activate-environment: true
       - name: ffmpeg
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: uv pip install --system -e ".[dev]"
+      - run: uv pip install -e ".[dev]"
       - run: python -m pytest -q
