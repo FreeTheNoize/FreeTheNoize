@@ -49,8 +49,12 @@ def estimate_bpm(x: np.ndarray) -> dict:
     # Onset strength: half-wave rectified flux of log-compressed magnitude.
     logm = np.log1p(100 * mag)
     flux = np.maximum(np.diff(logm, axis=0), 0).sum(axis=1)
-    # No transients at all (drones, test tones): no tempo to find.
-    if len(flux) < 4 * 86 or flux.mean() < 0.02 * logm.sum(axis=1).mean():
+    # No transients at all (drones, test tones): no tempo to find. Steady
+    # low tones still make the flux ripple (STFT hop vs. the tone's period),
+    # so also require the loudness envelope itself to move.
+    env = 20 * np.log10(np.sqrt((mag ** 2).sum(axis=1)) + 1e-9)
+    env_motion = float((env - ndimage.uniform_filter1d(env, 86)).std())
+    if len(flux) < 4 * 86 or flux.mean() < 0.02 * logm.sum(axis=1).mean() or env_motion < 0.05:
         return {"bpm": None, "confidence": 0.0}
     flux -= ndimage.uniform_filter1d(flux, 43)  # remove slow trend
     flux = np.maximum(flux, 0)

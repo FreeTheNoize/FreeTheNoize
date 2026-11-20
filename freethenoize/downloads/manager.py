@@ -228,7 +228,7 @@ class DownloadManager:
                            on_resolved: Callable[[dict], None] | None = None):
         self.emit("resolving", {"url": url, "active": True, "origin": origin})
         try:
-            title, refs = resolve(url, self.base_params(url))
+            title, refs = resolve(url, {**self.base_params(url), "no_warnings": True})
         except Exception as e:
             err = _short_error(e)
             self.emit("resolving", {"url": url, "active": False, "error": err, "origin": origin})

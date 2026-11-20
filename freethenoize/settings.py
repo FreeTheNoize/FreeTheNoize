@@ -53,6 +53,11 @@ class Settings:
         with self._lock:
             return dict(self._data)
 
+    def override(self, key: str, value) -> None:
+        """Change a value for this process only, without saving it."""
+        with self._lock:
+            self._data[key] = value
+
     def update(self, patch: dict) -> dict:
         with self._lock:
             for key, value in patch.items():

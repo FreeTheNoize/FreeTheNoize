@@ -89,3 +89,57 @@ def test_tag_roundtrip(tmp_path, ext):
     got, got_cover = tagging.read_tags(path)
     assert got["title"] == "Título" and got["artist"] == "Artista" and got["album"] == "Álbum"
     assert got_cover == cover
+
+
+def _clicks(bpm: float, seconds: int = 30, sr: int = 44_100) -> np.ndarray:
+    t = np.arange(sr * seconds) / sr
+    x = np.zeros_like(t)
+    n = int(0.08 * sr)
+    for b in np.arange(0, seconds, 60 / bpm):
+        i = int(b * sr)
+        x[i:i + n] += np.sin(2 * np.pi * 60 * t[:n])[: len(x[i:i + n])] * np.exp(-t[:n] * 40)[: len(x[i:i + n])]
+    return x.astype(np.float32)
+
+
+@pytest.mark.parametrize("bpm", [90, 122.5, 128, 140, 174])
+def test_bpm(bpm):
+    from freethenoize.analysis import musical
+    assert musical.analyze(_clicks(bpm), 44_100)["bpm"] == pytest.approx(bpm, abs=0.3)
+
+
+@pytest.mark.parametrize("hz", [40, 55, 110, 440])
+def test_no_bpm_for_steady_tone(hz):
+    from freethenoize.analysis import musical
+    t = np.arange(44_100 * 20) / 44_100
+    assert musical.analyze(np.sin(2 * np.pi * hz * t).astype(np.float32), 44_100)["bpm"] is None
+
+
+@pytest.mark.parametrize("name, camelot, chords", [
+    ("C", "8B", [(0, 4, 7), (5, 9, 12), (7, 11, 14), (0, 4, 7)]),
+    ("Am", "8A", [(9, 12, 16), (2, 5, 9), (4, 8, 11), (9, 12, 16)]),
+    ("F#m", "11A", [(6, 9, 13), (11, 14, 18), (1, 5, 8), (6, 9, 13)]),
+])
+def test_key(name, camelot, chords):
+    from freethenoize.analysis import musical
+    sr = 44_100
+    tt = np.arange(sr * 2) / sr
+    tone = lambda f: sum(np.sin(2 * np.pi * f * h * tt) / h for h in (1, 2, 3, 4))
+    x = np.concatenate([sum(tone(220 * 2 ** ((n - 9) / 12)) for n in c) for c in chords * 6])
+    r = musical.analyze(x.astype(np.float32), sr)
+    assert (r["key"], r["camelot"]) == (name, camelot)
+
+
+@pytest.mark.skipif(not FFMPEG, reason="needs ffmpeg")
+@pytest.mark.parametrize("ext", ["mp3", "flac", "m4a", "aiff"])
+def test_bpm_key_tags_roundtrip(tmp_path, ext):
+    path = tmp_path / f"t.{ext}"
+    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", "sine=d=1", str(path)], check=True)
+    assert tagging.write_tags(path, {"title": "x", "bpm": 127.6, "key": "F#m"})
+    got, _ = tagging.read_tags(path)
+    assert got["bpm"] == "128" and got["key"] == "F#m"
+
+
+def test_archive_key():
+    from freethenoize.downloads.resolve import archive_key
+    assert archive_key("Soundcloud", "123") == "soundcloud 123"
+    assert archive_key(None, "123") is None

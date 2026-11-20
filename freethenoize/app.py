@@ -7,6 +7,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from . import __version__, runtime
 
@@ -37,7 +38,7 @@ def _get(args):
 
     core = Core()
     if args.out:
-        core.settings.update({"download_dir": args.out})
+        core.settings.override("download_dir", str(Path(args.out).expanduser().resolve()))
     lock = threading.Lock()
     pending_links = len(args.urls)
     finished = {}
