@@ -20,7 +20,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Native window. Not needed for `freethenoize serve` (Docker).
-desktop = ["pywebview>=6.2", "imageio-ffmpeg>=0.6"]
+desktop = [
+    "pywebview>=6.2",
+    "pywebview[qt]>=6.2; sys_platform == 'linux'",
+    "imageio-ffmpeg>=0.6",
+]
 dev = ["pytest>=9.0", "httpx>=0.28", "pyinstaller>=6.22"]
 
 [project.scripts]
