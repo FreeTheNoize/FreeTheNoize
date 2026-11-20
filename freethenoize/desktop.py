@@ -57,8 +57,11 @@ class NativeBridge:
         login = webview.create_window(
             "Iniciar sesión en SoundCloud", "https://soundcloud.com/signin",
             width=520, height=720)
+        from . import popups
+
+        popups.allow_popups(login)
         closed = threading.Event()
-        login.events.closed += lambda *_: closed.set()
+        login.events.closed += lambda *_: (closed.set(), popups.forget(login))
         deadline = time.monotonic() + 600
         while not closed.is_set() and time.monotonic() < deadline:
             time.sleep(1.5)
@@ -107,6 +110,9 @@ def run():
         background_color="#0a0a0a",
     )
     bridge._window = window
+    from . import popups
+
+    popups.install()
     try:
         webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False)
     except Exception as exc:
