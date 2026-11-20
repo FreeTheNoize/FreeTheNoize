@@ -2,6 +2,11 @@ name: Desktop builds
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/release.yml"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -10,13 +15,19 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
-            artifact: FreeTheNoize-macOS-arm64.zip
+            artifact: FreeTheNoize-macOS-AppleSilicon.zip
+          - os: macos-15-intel
+            artifact: FreeTheNoize-macOS-Intel.zip
           - os: windows-latest
             artifact: FreeTheNoize-Windows-x64.zip
+          - os: ubuntu-22.04
+            artifact: FreeTheNoize-Linux-x64.zip
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
@@ -25,16 +36,32 @@ jobs:
           activate-environment: true
       - run: uv pip install -e ".[desktop,dev]"
       - run: pyinstaller packaging/freethenoize.spec --noconfirm
+      - name: Smoke test (serve mode)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then BIN=dist/FreeTheNoize.app/Contents/MacOS/FreeTheNoize
+          elif [ "$RUNNER_OS" = "Windows" ]; then BIN=dist/FreeTheNoize/FreeTheNoize.exe
+          else BIN=dist/FreeTheNoize/FreeTheNoize; fi
+          FTN_DATA_DIR="$RUNNER_TEMP/ftn" "$BIN" serve --port 8799 --password x &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8799/api/health && exit 0
+            sleep 1
+          done
+          echo "server did not start"; exit 1
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: cd dist && ditto -c -k --keepParent FreeTheNoize.app ../${{ matrix.artifact }}
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
+          compression-level: 0
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

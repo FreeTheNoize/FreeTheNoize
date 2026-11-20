@@ -1,7 +1,7 @@
 # FreeTheNoize
 
 Descarga música de SoundCloud a la **máxima calidad disponible**, comprueba qué calidad tiene de verdad y organízala para pinchar.
-Funciona como **app de escritorio** (macOS, Windows) o como **servicio web** (Docker, para tenerlo en un servidor o NAS y usarlo desde el móvil).
+Funciona como **app de escritorio** (macOS Apple Silicon e Intel, Windows, Linux) o como **servicio web** (Docker, para tenerlo en un servidor o NAS y usarlo desde el móvil).
 
 ## Qué hace
 

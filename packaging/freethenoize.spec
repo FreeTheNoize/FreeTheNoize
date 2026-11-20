@@ -1,4 +1,4 @@
-# PyInstaller spec: desktop app for macOS (.app) and Windows (folder + .exe).
+# PyInstaller spec: desktop app for macOS (.app), Windows and Linux (folder + executable).
 #   pyinstaller packaging/freethenoize.spec --noconfirm
 import sys
 from pathlib import Path
@@ -12,8 +12,10 @@ hidden = (
     collect_submodules("uvicorn")
     + collect_submodules("yt_dlp")
     + collect_submodules("webview")
-    + ["keyring.backends.macOS", "keyring.backends.Windows", "multipart"]
+    + ["keyring.backends.macOS", "keyring.backends.Windows", "keyring.backends.SecretService", "multipart"]
 )
+if sys.platform.startswith("linux"):
+    hidden += collect_submodules("qtpy")
 datas = [(str(ROOT / "freethenoize" / "ui"), "freethenoize/ui")]
 datas += collect_data_files("imageio_ffmpeg")
 binaries = []

@@ -107,6 +107,21 @@ def run():
         background_color="#0a0a0a",
     )
     bridge._window = window
-    webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False)
+    try:
+        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False)
+    except Exception as exc:
+        # No usable GUI backend (e.g. a Linux box without Qt/GTK libraries):
+        # keep the server running and use the default browser instead.
+        import webbrowser
+
+        url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
+        print(f"No se pudo abrir la ventana ({exc}). Abriendo en el navegador: {url}")
+        print("Ctrl+C para salir.")
+        webbrowser.open(url)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
     server.should_exit = True
     core.stop()
