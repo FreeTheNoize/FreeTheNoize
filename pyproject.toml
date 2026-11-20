@@ -1,24 +1,27 @@
 [project]
 name = "freethenoize"
-version = "3.0.0.dev0"
-description = "FreeTheNoize — descarga SoundCloud a la máxima calidad disponible, con espectrograma y comparador"
+version = "3.0.0"
+description = "FreeTheNoize — descarga SoundCloud a la máxima calidad disponible, con espectrograma, BPM/tonalidad y comparador. App de escritorio o servicio web."
 readme = "README.md"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "yt-dlp>=2025.1.1",
-    "pywebview>=6.0",
-    "numpy>=1.26",
-    "scipy>=1.11",
-    "mutagen>=1.47",
-    "Pillow>=10.0",
-    "platformdirs>=4.0",
+    "yt-dlp>=2026.10.26",
+    "fastapi>=0.165",
+    "uvicorn>=0.54",
+    "python-multipart>=0.0.20",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "mutagen>=1.48",
+    "Pillow>=11.0",
+    "platformdirs>=4.3",
     "keyring>=25.0",
-    "imageio-ffmpeg>=0.5",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pyinstaller>=6.0"]
+# Native window. Not needed for `freethenoize serve` (Docker).
+desktop = ["pywebview>=6.2", "imageio-ffmpeg>=0.6"]
+dev = ["pytest>=9.0", "httpx>=0.28", "pyinstaller>=6.22"]
 
 [project.scripts]
 freethenoize = "freethenoize.app:main"
@@ -29,3 +32,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["freethenoize"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

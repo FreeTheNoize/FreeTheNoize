@@ -12,6 +12,14 @@ class TrackRef:
     uploader: str
     playlist: str | None
     index: int | None
+    archive_id: str | None = None
+
+
+def archive_key(extractor: str | None, video_id: str | None) -> str | None:
+    """Same format as yt-dlp's --download-archive."""
+    if extractor and video_id:
+        return f"{extractor.lower()} {video_id}"
+    return None
 
 
 def source_of(url: str) -> str:
@@ -43,6 +51,7 @@ def resolve(url: str, ydl_params: dict) -> tuple[str | None, list[TrackRef]]:
                 uploader=info.get("uploader") or "",
                 playlist=None,
                 index=None,
+                archive_id=archive_key(info.get("extractor_key"), info.get("id")),
             )]
 
         tracks: list[TrackRef] = []
@@ -61,6 +70,7 @@ def resolve(url: str, ydl_params: dict) -> tuple[str | None, list[TrackRef]]:
                     uploader=entry.get("uploader") or "",
                     playlist=folder,
                     index=i,
+                    archive_id=archive_key(entry.get("ie_key"), entry.get("id")),
                 ))
 
         title = info.get("title")

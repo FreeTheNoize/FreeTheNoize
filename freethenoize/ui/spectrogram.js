@@ -11,6 +11,7 @@
     viridis: [[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]],
     turbo:   [[48,18,59],[70,107,227],[40,187,236],[49,242,153],[162,252,60],[237,208,58],[251,128,34],[210,48,5],[122,4,3]],
     gris:    [[0,0,0],[255,255,255]],
+    acido:   [[0,0,0],[10,22,0],[40,70,0],[110,160,0],[198,255,0],[240,255,190]],
   };
   const CMAP_NAMES = Object.keys(STOPS);
 
@@ -156,7 +157,7 @@
       }
       const ctx = this.canvas.getContext('2d');
       ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, g.W, g.H);
       if (!this.data) return;
 
@@ -165,7 +166,7 @@
       ctx.drawImage(this._image(), g.x0, g.y0, g.pw, g.ph);
 
       // Axes
-      ctx.font = '10px ui-monospace, Menlo, monospace';
+      ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
       ctx.fillStyle = 'rgba(255,255,255,.72)';
       ctx.strokeStyle = 'rgba(255,255,255,.14)';
       ctx.lineWidth = 1;
@@ -198,11 +199,11 @@
       if (this.markHz) {
         const y = Math.round(this._yForHz(this.markHz, g)) + 0.5;
         ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = 'rgba(80,200,255,.9)';
+        ctx.strokeStyle = 'rgba(198,255,0,.95)';
         ctx.beginPath(); ctx.moveTo(g.x0, y); ctx.lineTo(g.W, y); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(80,200,255,.95)';
-        ctx.font = '10px ui-monospace, Menlo, monospace';
+        ctx.fillStyle = 'rgba(198,255,0,1)';
+        ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
         ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
         ctx.fillText('corte ' + fmtHz(this.markHz) + 'Hz', g.x0 + 6, y - 3);
       }

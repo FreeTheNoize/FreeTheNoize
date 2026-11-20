@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import compare, decode, loudness, spectrum
+from . import compare, decode, loudness, musical, spectrum
 
 ANALYSIS_RATE_CAP = 96_000
 
@@ -24,7 +24,14 @@ def analyze(path: str | Path) -> dict:
         "loudness": loudness.measure(stereo, sr),
         "cutoff": spectrum.detect_cutoff(mono, sr, info["lossless_container"]),
         "spectrogram": spectrum.spectrogram(mono, sr),
+        "musical": musical.analyze(mono, sr),
     }
+
+
+def bpm_key(path: str | Path) -> dict:
+    """Cheap tempo/key pass for freshly downloaded files."""
+    mono = decode.decode(path, musical.RATE, channels=1, max_seconds=600)[:, 0]
+    return musical.analyze(mono, musical.RATE)
 
 
 def null_test(path_a: str | Path, path_b: str | Path) -> tuple[dict, np.ndarray, int]:

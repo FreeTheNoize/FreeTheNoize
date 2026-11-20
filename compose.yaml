@@ -1,0 +1,10 @@
+services:
+  freethenoize:
+    build: .
+    ports: ["8765:8765"]
+    environment:
+      FTN_PASSWORD: ${FTN_PASSWORD:?define FTN_PASSWORD}
+    volumes:
+      - ./data:/data
+      - ./music:/music
+    restart: unless-stopped

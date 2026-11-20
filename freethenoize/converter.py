@@ -25,7 +25,24 @@ def _codec_args(fmt: str, bits: int | None) -> list[str]:
     }[fmt]
 
 
-def convert_one(src: str, fmt: str, out_dir: str | None) -> dict:
+def _normalize_filter(src: Path, info: dict, target_lufs: float) -> tuple[list[str], str]:
+    """Static gain to hit target_lufs; a limiter only if the peaks would clip."""
+    from .analysis import decode, loudness
+
+    sr = min(info.get("sample_rate") or 44_100, 96_000)
+    m = loudness.measure(decode.decode(src, sr, channels=2), sr)
+    if m["integrated_lufs"] is None:
+        return [], "No se ha podido medir el loudness; se convierte sin normalizar."
+    gain = target_lufs - m["integrated_lufs"]
+    chain = [f"volume={gain:.2f}dB"]
+    note = f"Normalizado de {m['integrated_lufs']:.1f} a {target_lufs:.1f} LUFS ({gain:+.1f} dB)"
+    if m["true_peak_dbtp"] is not None and m["true_peak_dbtp"] + gain > -1.0:
+        chain.append("alimiter=limit=0.891:level=false:attack=1:release=50")
+        note += "; limitador a -1 dBTP"
+    return ["-af", ",".join(chain)], note
+
+
+def convert_one(src: str, fmt: str, out_dir: str | None, normalize_lufs: float | None = None) -> dict:
     src_path = Path(src)
     spec = FORMATS[fmt]
     info = probe(src_path)
@@ -39,9 +56,15 @@ def convert_one(src: str, fmt: str, out_dir: str | None) -> dict:
         warning = ("El original tiene pérdida: el archivo ocupará más, "
                    "pero no sonará mejor.")
 
+    filters, note = [], None
+    if normalize_lufs is not None:
+        filters, note = _normalize_filter(src_path, info, float(normalize_lufs))
+        if not filters:
+            warning, note = f"{warning + ' ' if warning else ''}{note}", None
+
     tmp = dest.with_name(dest.stem + ".part" + dest.suffix)
     res = ffmpeg.run(["-v", "error", "-y", "-i", str(src_path), "-map", "0:a:0",
-                      "-map_metadata", "-1", *_codec_args(fmt, info.get("bits")), str(tmp)])
+                      "-map_metadata", "-1", *filters, *_codec_args(fmt, info.get("bits")), str(tmp)])
     if res.returncode != 0:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(res.stderr.decode("utf-8", "replace").strip() or "ffmpeg ha fallado")
@@ -52,4 +75,4 @@ def convert_one(src: str, fmt: str, out_dir: str | None) -> dict:
     except Exception as e:
         warning = f"{warning + ' ' if warning else ''}No se han copiado las etiquetas: {e}"
     tmp.replace(dest)
-    return {"src": str(src_path), "dest": str(dest), "warning": warning}
+    return {"src": str(src_path), "dest": str(dest), "warning": warning, "note": note}

@@ -30,6 +30,25 @@ def _zip_version(path) -> str | None:
         return None
 
 
+class _ZipFirstFinder:
+    """Serves every `yt_dlp` module from the downloaded zipapp.
+
+    A plain sys.path entry is not enough: in a PyInstaller build the frozen
+    importer sits in sys.meta_path ahead of the path finder and would keep
+    returning the bundled (old) copy.
+    """
+
+    def __init__(self, zip_path: str):
+        self.zip_path = zip_path
+
+    def find_spec(self, name, path=None, target=None):
+        if name != "yt_dlp" and not name.startswith("yt_dlp."):
+            return None
+        from importlib.machinery import PathFinder
+
+        return PathFinder.find_spec(name, path if path else [self.zip_path], target)
+
+
 def activate() -> None:
     """Call once at startup, before importing yt_dlp anywhere."""
     if "yt_dlp" in sys.modules:
@@ -44,7 +63,7 @@ def activate() -> None:
     except Exception:
         bundled = "0"
     if _version_key(downloaded) > _version_key(bundled):
-        sys.path.insert(0, str(YTDLP_ZIP))
+        sys.meta_path.insert(0, _ZipFirstFinder(str(YTDLP_ZIP)))
 
 
 def current_version() -> str:

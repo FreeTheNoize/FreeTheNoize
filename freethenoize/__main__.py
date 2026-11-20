@@ -1,3 +1,5 @@
+import sys
+
 from freethenoize.app import main
 
-main()
+sys.exit(main())

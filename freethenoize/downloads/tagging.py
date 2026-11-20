@@ -10,25 +10,27 @@ from pathlib import Path
 from mutagen import File as MutagenFile
 from mutagen.aiff import AIFF
 from mutagen.flac import FLAC, Picture
-from mutagen.id3 import APIC, COMM, ID3, TALB, TCON, TDRC, TIT2, TPE1, TPE2, WOAS, ID3NoHeaderError
-from mutagen.mp4 import MP4, MP4Cover
+from mutagen.id3 import APIC, COMM, ID3, TALB, TBPM, TCON, TDRC, TIT2, TKEY, TPE1, TPE2, WOAS, ID3NoHeaderError
+from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 
-TAG_KEYS = ("title", "artist", "album", "album_artist", "genre", "date", "comment", "url")
+TAG_KEYS = ("title", "artist", "album", "album_artist", "genre", "date", "comment", "url", "bpm", "key")
 
 _ID3_FRAMES = {
     "title": TIT2, "artist": TPE1, "album": TALB, "album_artist": TPE2,
-    "genre": TCON, "date": TDRC,
+    "genre": TCON, "date": TDRC, "bpm": TBPM, "key": TKEY,
 }
 _MP4_KEYS = {
     "title": "©nam", "artist": "©ART", "album": "©alb", "album_artist": "aART",
     "genre": "©gen", "date": "©day", "comment": "©cmt",
 }
+_MP4_KEY_ATOM = "----:com.apple.iTunes:initialkey"
 _VORBIS_KEYS = {
     "title": "TITLE", "artist": "ARTIST", "album": "ALBUM", "album_artist": "ALBUMARTIST",
     "genre": "GENRE", "date": "DATE", "comment": "COMMENT", "url": "WEBSITE",
+    "bpm": "BPM", "key": "INITIALKEY",
 }
 
 
@@ -54,10 +56,19 @@ def shrink_cover(data: bytes, max_px: int) -> bytes:
         return out.getvalue()
 
 
+def _text(meta: dict, key: str) -> str | None:
+    v = meta.get(key)
+    if v in (None, ""):
+        return None
+    if key == "bpm":
+        return str(int(round(float(v))))
+    return str(v)
+
+
 def _fill_id3(tags: ID3, meta: dict, cover: bytes | None):
     for key, frame in _ID3_FRAMES.items():
-        if meta.get(key):
-            tags.setall(frame.__name__, [frame(encoding=3, text=str(meta[key]))])
+        if (text := _text(meta, key)) is not None:
+            tags.setall(frame.__name__, [frame(encoding=3, text=text)])
     if meta.get("comment"):
         tags.setall("COMM", [COMM(encoding=3, lang="eng", desc="", text=meta["comment"])])
     if meta.get("url"):
@@ -95,8 +106,12 @@ def write_tags(path: str | Path, meta: dict, cover: bytes | None = None) -> bool
     elif ext in (".m4a", ".mp4", ".alac"):
         audio = MP4(path)
         for key, atom in _MP4_KEYS.items():
-            if meta.get(key):
-                audio[atom] = [str(meta[key])]
+            if (text := _text(meta, key)) is not None:
+                audio[atom] = [text]
+        if (bpm := _text(meta, "bpm")) is not None:
+            audio["tmpo"] = [int(bpm)]
+        if (key := _text(meta, "key")) is not None:
+            audio[_MP4_KEY_ATOM] = [MP4FreeForm(key.encode())]
         if cover:
             fmt = MP4Cover.FORMAT_PNG if image_mime(cover) == "image/png" else MP4Cover.FORMAT_JPEG
             audio["covr"] = [MP4Cover(cover, imageformat=fmt)]
@@ -106,8 +121,8 @@ def write_tags(path: str | Path, meta: dict, cover: bytes | None = None) -> bool
         if audio.tags is None:
             audio.add_tags()
         for key, name in _VORBIS_KEYS.items():
-            if meta.get(key):
-                audio[name] = [str(meta[key])]
+            if (text := _text(meta, key)) is not None:
+                audio[name] = [text]
         if cover:
             if ext == ".flac":
                 audio.clear_pictures()
@@ -147,6 +162,10 @@ def read_tags(path: str | Path) -> tuple[dict, bytes | None]:
         for key, atom in _MP4_KEYS.items():
             if atom in tags:
                 meta[key] = str(tags[atom][0])
+        if "tmpo" in tags:
+            meta["bpm"] = str(tags["tmpo"][0])
+        if _MP4_KEY_ATOM in tags:
+            meta["key"] = bytes(tags[_MP4_KEY_ATOM][0]).decode("utf-8", "replace")
         if "covr" in tags:
             cover = bytes(tags["covr"][0])
     else:

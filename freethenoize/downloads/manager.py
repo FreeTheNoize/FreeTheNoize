@@ -45,6 +45,10 @@ class Job:
     artist: str = ""
     thumbnail: str | None = None
     quality: dict | None = None
+    bpm: float | None = None
+    key: str | None = None
+    camelot: str | None = None
+    origin: str | None = None
     path: str | None = None
     error: str | None = None
     warnings: list[str] = field(default_factory=list)
@@ -175,9 +179,14 @@ class DownloadManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def add(self, urls: list[str]) -> None:
+    def add(self, urls: list[str], origin: str | None = None,
+            on_resolved: Callable[[dict], None] | None = None) -> None:
+        """origin: where the request came from (e.g. a subscription id).
+        on_resolved({"title", "count", "skipped", "error"}) runs once the link
+        has been expanded into tracks."""
         for url in urls:
-            threading.Thread(target=self._resolve_and_queue, args=(url,), daemon=True).start()
+            threading.Thread(target=self._resolve_and_queue, args=(url, origin, on_resolved),
+                             daemon=True).start()
 
     def cancel(self, job_id: int):
         job = self.jobs.get(job_id)
@@ -200,7 +209,7 @@ class DownloadManager:
         if not old or old.status not in ("error", "cancelled"):
             return
         job = Job(url=old.url, title=old.title, uploader=old.uploader,
-                  playlist=old.playlist, index=old.index, id=old.id)
+                  playlist=old.playlist, index=old.index, id=old.id, origin=old.origin)
         self.jobs[job.id] = job
         self._enqueue([job])
 
@@ -215,19 +224,34 @@ class DownloadManager:
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
-    def _resolve_and_queue(self, url: str):
-        self.emit("resolving", {"url": url, "active": True})
+    def _resolve_and_queue(self, url: str, origin: str | None = None,
+                           on_resolved: Callable[[dict], None] | None = None):
+        self.emit("resolving", {"url": url, "active": True, "origin": origin})
         try:
             title, refs = resolve(url, self.base_params(url))
         except Exception as e:
-            self.emit("resolving", {"url": url, "active": False, "error": _short_error(e)})
+            err = _short_error(e)
+            self.emit("resolving", {"url": url, "active": False, "error": err, "origin": origin})
+            if on_resolved:
+                on_resolved({"title": None, "count": 0, "skipped": 0, "error": err})
             return
-        self.emit("resolving", {"url": url, "active": False, "count": len(refs), "title": title})
+        refs = [r for r in refs if r.url]
+        skipped = 0
+        if self.settings["skip_downloaded"]:
+            # Cheap pre-check on the flat listing: re-syncing a 500-track
+            # playlist should not hit SoundCloud 500 times.
+            before = len(refs)
+            refs = [r for r in refs if not (r.archive_id and r.archive_id in self.archive)]
+            skipped = before - len(refs)
+        summary = {"title": title, "count": len(refs), "skipped": skipped, "error": None}
+        self.emit("resolving", {"url": url, "active": False, "origin": origin, **summary})
+        if on_resolved:
+            on_resolved(summary)
         use_folder = self.settings["playlist_subfolder"]
         jobs = [
             Job(url=r.url, title=r.title, uploader=r.uploader,
-                playlist=r.playlist if use_folder else None, index=r.index)
-            for r in refs if r.url
+                playlist=r.playlist if use_folder else None, index=r.index, origin=origin)
+            for r in refs
         ]
         for job in jobs:
             self.jobs[job.id] = job
@@ -349,6 +373,15 @@ class DownloadManager:
         job.status = "tagging"
         job.progress = 1.0
         self._emit_job(job, force=True)
+        if self.settings["detect_bpm_key"]:
+            try:
+                from ..analysis import bpm_key
+
+                mk = bpm_key(path)
+                job.bpm, job.key, job.camelot = mk["bpm"], mk["key"], mk["camelot"]
+                meta["bpm"], meta["key"] = mk["bpm"], mk["key"]
+            except Exception as e:
+                job.warnings.append(f"No se ha podido calcular BPM/tonalidad: {_short_error(e)}")
         self._tag(path, meta, cover_url, job)
 
         job.path = str(path)
@@ -357,7 +390,7 @@ class DownloadManager:
         append_history({
             "time": time.time(), "url": job.url, "path": job.path,
             "title": job.title, "artist": job.artist, "quality": job.quality,
-            "thumbnail": job.thumbnail,
+            "thumbnail": job.thumbnail, "bpm": job.bpm, "key": job.key, "camelot": job.camelot,
         })
 
     def _metadata(self, info: dict, job: Job) -> dict:
