@@ -114,7 +114,8 @@ def run():
 
     popups.install()
     try:
-        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False)
+        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False,
+                      icon=str(Path(__file__).parent / "ui" / "icon-512.png"))
     except Exception as exc:
         # No usable GUI backend (e.g. a Linux box without Qt/GTK libraries):
         # keep the server running and use the default browser instead.
