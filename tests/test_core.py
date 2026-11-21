@@ -143,3 +143,11 @@ def test_archive_key():
     from freethenoize.downloads.resolve import archive_key
     assert archive_key("Soundcloud", "123") == "soundcloud 123"
     assert archive_key(None, "123") is None
+
+
+def test_update_version_compare_and_asset():
+    from freethenoize import updates
+
+    assert updates.version_tuple("v3.1.0") > updates.version_tuple("3.0.12") > updates.version_tuple("3.0.4")
+    assert updates.version_tuple("3.0") == (3, 0, 0)
+    assert updates.asset_name() is None or updates.asset_name().startswith("FreeTheNoize-")

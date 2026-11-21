@@ -1076,7 +1076,72 @@
 
   // ── Events from the server ─────────────────────────────────────────────
 
+  // ── Updates ────────────────────────────────────────────────────────────
+
+  const upd = { status: null, shown: false };
+  (() => { const eq = $('#upd-eq'); for (let i = 0; i < 9; i++) eq.append(h('i', { style: `animation-delay:${(-i * 0.13).toFixed(2)}s;animation-duration:${(0.5 + (i * 37 % 7) / 10).toFixed(2)}s` })); })();
+
+  function showUpdate(st, { force = false } = {}) {
+    upd.status = st;
+    const info = st && st.info;
+    if (!info || !info.newer) { if (force) toast(`Estás en la última versión (${st ? st.current : state.version}).`, 'ok'); return; }
+    if (info.skipped && !force) return;
+    $('#upd-old').textContent = 'v' + st.current;
+    $('#upd-new').textContent = 'v' + info.latest;
+    $('#upd-notes').textContent = info.notes || '';
+    $('#upd-page').href = info.page || '#';
+    $('#upd-go').hidden = !st.can_download;
+    renderUpdateProgress(st.download);
+    const box = $('#upd');
+    if (box.hidden) { box.hidden = false; box.querySelector('.upd-flash').style.animation = 'none'; void box.offsetWidth; box.querySelector('.upd-flash').style.animation = ''; }
+    upd.shown = true;
+  }
+
+  function renderUpdateProgress(d) {
+    if (!d) return;
+    const bar = $('#upd-progress'), go = $('#upd-go'), card = $('#upd .upd-card');
+    card.classList.toggle('ready', d.state === 'ready');
+    if (d.state === 'downloading') {
+      const pct = d.total ? Math.floor((d.done / d.total) * 100) : 0;
+      bar.hidden = false; $('#upd-bar').style.width = pct + '%';
+      $('#upd-pct').textContent = d.total ? `${pct}% · ${(d.done / 1048576).toFixed(0)} / ${(d.total / 1048576).toFixed(0)} MB` : 'descargando…';
+      go.disabled = true; go.textContent = 'Descargando…';
+    } else if (d.state === 'ready') {
+      bar.hidden = false; $('#upd-bar').style.width = '100%'; $('#upd-pct').textContent = 'LISTO';
+      $('#upd-title').textContent = 'LISTO'; $('#upd-title').dataset.text = 'LISTO';
+      go.disabled = false; go.textContent = 'Abrir en la carpeta';
+    } else if (d.state === 'error') {
+      bar.hidden = true; go.disabled = false; go.textContent = 'Reintentar';
+      toast('No se ha podido descargar la actualización: ' + d.error, 'error');
+    } else {
+      bar.hidden = true; go.disabled = false; go.textContent = 'Descargar';
+    }
+  }
+
+  $('#upd-go').addEventListener('click', async () => {
+    const d = upd.status && upd.status.download;
+    if (d && d.state === 'ready') { reveal(d.path); return; }
+    const st = await POST('/api/update/download').catch(() => null);
+    if (st) { upd.status = st; renderUpdateProgress(st.download); }
+  });
+  $('#upd-later').addEventListener('click', () => { $('#upd').hidden = true; });
+  $('#upd-skip').addEventListener('click', async () => { await POST('/api/update/skip').catch(() => {}); $('#upd').hidden = true; });
+  $('#upd').addEventListener('click', (e) => { if (e.target.id === 'upd') $('#upd').hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#upd').hidden) $('#upd').hidden = true; });
+  $('#update-check').addEventListener('click', async (e) => {
+    e.currentTarget.classList.add('busy');
+    try { showUpdate(await POST('/api/update/check'), { force: true }); } catch (_) {}
+    finally { e.currentTarget.classList.remove('busy'); }
+  });
+
   function onEvent(kind, p) {
+    if (kind === 'update_available') { if (!upd.shown || !$('#upd').hidden) showUpdate(p); return; }
+    if (kind === 'update_progress') {
+      if (upd.status) upd.status.download = p;
+      if (!$('#upd').hidden) renderUpdateProgress(p);
+      else if (p.state === 'ready') { toast('Actualización descargada. Ábrela desde Ajustes o tu carpeta de Descargas.', 'ok'); }
+      return;
+    }
     if (kind === 'job') {
       state.jobs.set(p.id, p);
       renderJob(p);
@@ -1173,6 +1238,7 @@
     $('#ytdlp-version').textContent = 'versión ' + s.ytdlp_version;
     $('#ffmpeg-path').textContent = s.ffmpeg === true ? 'disponible' : s.ffmpeg || 'no encontrado';
     $('#app-version').textContent = 'versión ' + s.version;
+    if (s.update && s.update.info && !upd.shown) showUpdate(s.update);
     $('#brand-ver').textContent = 'v' + s.version;
     $('#sc-where').textContent = s.mode === 'server'
       ? 'El token se guarda en el servidor, no en este navegador.'

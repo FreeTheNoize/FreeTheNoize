@@ -240,6 +240,22 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
     def search(q: str = ""):
         return core.search(q)
 
+    @app.get("/api/update")
+    def update_status():
+        return core.updates.status()
+
+    @app.post("/api/update/check")
+    def update_check():
+        return core.updates.check()
+
+    @app.post("/api/update/download")
+    def update_download():
+        return core.updates.start_download()
+
+    @app.post("/api/update/skip")
+    def update_skip():
+        return core.updates.skip()
+
     @app.post("/api/preview")
     def preview(body: Text):
         return core.preview(body.text)
