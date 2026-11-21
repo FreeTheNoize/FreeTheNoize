@@ -103,3 +103,10 @@ def test_preview_validation(client):
     login(client)
     assert client.post("/api/preview", json={"text": "not a url"}).status_code == 400
     assert client.get("/api/preview/nope.mp3").status_code == 404
+
+
+def test_update_status_server(client):
+    login(client)
+    st = client.get("/api/update").json()
+    assert st["can_download"] is False
+    assert client.post("/api/update/download").status_code == 400

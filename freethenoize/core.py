@@ -28,6 +28,7 @@ from .library import AUDIO_EXTS, Library
 from .paths import AUDIO_CACHE_DIR, UPLOAD_DIR
 from .preview import Previews
 from .subscriptions import Subscriptions
+from .updates import Updater
 
 _URL = re.compile(r"https?://\S+")
 # Played straight from disk; anything else is transcoded to WAV first so it
@@ -45,6 +46,7 @@ class Core:
         self.subscriptions = Subscriptions(self.downloads, self.emit)
         self.library = Library()
         self.previews = Previews(self.downloads.base_params)
+        self.updates = Updater(self.settings, self.emit)
         self._audio: dict[str, Path] = {}
         self._audio_lock = threading.Lock()
         self._sc_username: str | None = None
@@ -56,10 +58,12 @@ class Core:
 
     def start(self):
         self.subscriptions.start()
+        self.updates.start()
         threading.Thread(target=self._refresh_username, daemon=True).start()
 
     def stop(self):
         self.subscriptions.stop()
+        self.updates.stop()
 
     # ── State ────────────────────────────────────────────────────────────────
 
@@ -73,6 +77,7 @@ class Core:
             "settings": self.settings.as_dict(),
             "locked_settings": sorted(settings_mod.SERVER_LOCKED) if runtime.is_server() else [],
             "soundcloud": self.soundcloud_status(),
+            "update": self.updates.status(),
             "jobs": self.downloads.snapshot(),
             "subscriptions": self.subscriptions.list(),
             "formats": {k: v["label"] for k, v in converter.FORMATS.items()},

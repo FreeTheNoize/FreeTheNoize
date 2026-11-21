@@ -388,7 +388,12 @@
           <div class="controls"><button class="btn" id="ytdlp-update">Actualizar</button></div>
         </div>
         <div class="group-row"><div class="label">ffmpeg<small class="mono" id="ffmpeg-path"></small></div></div>
-        <div class="group-row"><div class="label">FreeTheNoize<small id="app-version"></small></div></div>
+        <div class="group-row">
+          <div class="label">FreeTheNoize<small id="app-version"></small></div>
+          <div class="controls"><button class="btn" id="update-check">Buscar actualización</button></div>
+        </div>
+        <div class="group-row"><div class="label">Buscar actualizaciones automáticamente<small>Al abrir la app y cada 6 horas, en las Releases de GitHub.</small></div><div class="controls"><input type="checkbox" class="switch" data-setting="check_updates"></div></div>
+        <div class="group-row desktop-only"><div class="label">Descargar actualizaciones sin preguntar<small>Si está desactivado, te pregunta antes de bajar la nueva versión.</small></div><div class="controls"><input type="checkbox" class="switch" data-setting="auto_download_updates"></div></div>
         <div class="group-row server-only" id="logout-row" hidden>
           <div class="label">Sesión en este navegador</div>
           <div class="controls"><button class="btn ghost" id="app-logout">Salir</button></div>
@@ -396,6 +401,29 @@
       </div>
     </section>
   </main>
+
+  <!-- ── Update ────────────────────────────────────────────────────────── -->
+  <div class="upd" id="upd" hidden>
+    <div class="upd-flash"></div>
+    <div class="upd-card" role="dialog" aria-modal="true" aria-labelledby="upd-title">
+      <div class="upd-marquee" aria-hidden="true"><span>NUEVA VERSIÓN ✶ FREE THE NOIZE ✶ NUEVA VERSIÓN ✶ FREE THE NOIZE ✶ NUEVA VERSIÓN ✶ FREE THE NOIZE ✶&nbsp;</span><span>NUEVA VERSIÓN ✶ FREE THE NOIZE ✶ NUEVA VERSIÓN ✶ FREE THE NOIZE ✶ NUEVA VERSIÓN ✶ FREE THE NOIZE ✶&nbsp;</span></div>
+      <div class="upd-body">
+        <div class="upd-eq" id="upd-eq" aria-hidden="true"></div>
+        <div class="upd-kicker">// transmisión entrante</div>
+        <h2 class="upd-title" id="upd-title" data-text="UPDATE">UPDATE</h2>
+        <div class="upd-ver"><span class="old" id="upd-old"></span><span class="arrow">→</span><span class="new" id="upd-new"></span></div>
+        <pre class="upd-notes" id="upd-notes"></pre>
+        <div class="upd-server server-only">Para actualizar el servicio: <code>docker compose pull &amp;&amp; docker compose up -d</code></div>
+        <div class="upd-progress" id="upd-progress" hidden><i id="upd-bar"></i><span id="upd-pct">0%</span></div>
+        <div class="upd-actions">
+          <button class="btn ghost" id="upd-skip">Saltar esta versión</button>
+          <button class="btn ghost" id="upd-later">Más tarde</button>
+          <a class="btn" id="upd-page" target="_blank" rel="noopener">Ver en GitHub</a>
+          <button class="btn primary desktop-only" id="upd-go">Descargar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Player ────────────────────────────────────────────────────────── -->
   <footer class="player" id="player" hidden>

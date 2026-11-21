@@ -475,3 +475,72 @@ body.has-player .toasts { bottom: 86px; }
 /* Pre-listen button while the stream is being resolved */
 .btn.busy { opacity: .55; pointer-events: none; animation: ftn-blink .8s steps(2) infinite; }
 @keyframes ftn-blink { 50% { opacity: .25; } }
+
+/* ── Update dialog ─────────────────────────────────────────────────────── */
+.upd { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px;
+  background: rgba(5, 5, 5, .82); backdrop-filter: blur(3px); animation: upd-fade .25s ease-out; }
+.upd[hidden] { display: none; }
+.upd::after { /* scanlines */
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .35;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(198, 255, 0, .05) 2px 3px);
+  animation: upd-scan 6s linear infinite; }
+.upd-flash { position: absolute; inset: 0; background: var(--acid); pointer-events: none;
+  animation: upd-flash .45s ease-out forwards; mix-blend-mode: difference; }
+.upd-card { position: relative; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: hidden;
+  display: flex; flex-direction: column; background: var(--bg); border: 2px solid var(--acid);
+  box-shadow: 10px 10px 0 var(--acid), 0 0 80px rgba(198, 255, 0, .25);
+  animation: upd-slam .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+.upd-marquee { display: flex; overflow: hidden; white-space: nowrap; background: var(--acid); color: var(--ink-on-acid);
+  font: 700 11px/1 var(--mono); letter-spacing: .18em; padding: 7px 0; flex: none; }
+.upd-marquee span { flex: none; animation: upd-marquee 9s linear infinite; }
+.upd-body { position: relative; padding: 26px 26px 22px; overflow: auto; }
+.upd-eq { position: absolute; right: 22px; top: 22px; display: flex; gap: 3px; align-items: flex-end; height: 46px; }
+.upd-eq i { width: 5px; height: 100%; background: var(--acid); transform-origin: bottom;
+  animation: upd-eq .9s ease-in-out infinite alternate; }
+.upd-kicker { font: 12px var(--mono); color: var(--acid); letter-spacing: .12em; margin-bottom: 6px; }
+.upd-title { position: relative; margin: 0; font: 400 clamp(52px, 12vw, 86px)/.9 var(--display);
+  color: var(--text); letter-spacing: -.02em; }
+.upd-title::before, .upd-title::after { content: attr(data-text); position: absolute; inset: 0; pointer-events: none; }
+.upd-title::before { color: var(--red); mix-blend-mode: screen; animation: upd-glitch 2.2s steps(1) infinite; }
+.upd-title::after { color: var(--acid); mix-blend-mode: screen; animation: upd-glitch 2.2s steps(1) infinite reverse; }
+.upd-ver { margin: 14px 0 12px; font: 700 18px var(--mono); display: flex; gap: 12px; align-items: center; }
+.upd-ver .old { color: var(--text-3); text-decoration: line-through; }
+.upd-ver .arrow { color: var(--acid); animation: upd-nudge .8s ease-in-out infinite alternate; }
+.upd-ver .new { color: var(--ink-on-acid); background: var(--acid); padding: 2px 8px; }
+.upd-notes { margin: 0 0 14px; max-height: 160px; overflow: auto; white-space: pre-wrap; font: 12px/1.5 var(--mono);
+  color: var(--text-2); border-left: 2px solid var(--line-2); padding-left: 10px; }
+.upd-notes:empty { display: none; }
+.upd-server { font-size: 13px; color: var(--text-2); margin-bottom: 14px; }
+.upd-server code { color: var(--acid); }
+.upd-progress { position: relative; height: 26px; border: 1px solid var(--acid); margin-bottom: 14px; overflow: hidden; }
+.upd-progress[hidden] { display: none; }
+.upd-progress i { position: absolute; inset: 0 auto 0 0; width: 0; transition: width .25s;
+  background: repeating-linear-gradient(-45deg, var(--acid) 0 10px, #9bcc00 10px 20px); background-size: 28px 28px;
+  animation: upd-stripes .6s linear infinite; }
+.upd-progress span { position: absolute; inset: 0; display: grid; place-items: center; font: 700 12px var(--mono);
+  color: var(--text); mix-blend-mode: difference; }
+.upd-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.upd-card.ready { animation: upd-pulse 1.2s ease-in-out infinite; }
+.upd-card.ready .upd-title { color: var(--acid); }
+
+@keyframes upd-fade { from { opacity: 0; } }
+@keyframes upd-flash { 0% { opacity: .9; } 100% { opacity: 0; visibility: hidden; } }
+@keyframes upd-slam { 0% { transform: scale(1.6) rotate(-4deg); opacity: 0; filter: blur(8px); }
+  60% { transform: scale(.96) rotate(1deg); opacity: 1; filter: none; } 100% { transform: none; } }
+@keyframes upd-marquee { to { transform: translateX(-100%); } }
+@keyframes upd-scan { to { background-position: 0 300px; } }
+@keyframes upd-eq { 0% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+@keyframes upd-nudge { to { transform: translateX(5px); } }
+@keyframes upd-stripes { to { background-position: 28px 0; } }
+@keyframes upd-pulse { 50% { box-shadow: 10px 10px 0 var(--acid), 0 0 140px rgba(198, 255, 0, .5); } }
+@keyframes upd-glitch {
+  0%, 86%, 100% { transform: none; clip-path: inset(0 0 100% 0); }
+  87% { transform: translate(-4px, 1px); clip-path: inset(10% 0 55% 0); }
+  90% { transform: translate(4px, -2px); clip-path: inset(60% 0 8% 0); }
+  93% { transform: translate(-2px, 2px); clip-path: inset(35% 0 35% 0); }
+  96% { transform: translate(3px, 0); clip-path: inset(0 0 80% 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd, .upd *, .upd::after { animation: none !important; }
+  .upd-flash { display: none; }
+}

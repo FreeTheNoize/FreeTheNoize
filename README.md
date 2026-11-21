@@ -21,7 +21,7 @@ Funciona como **app de escritorio** (macOS Apple Silicon e Intel, Windows, Linux
 - **Conversor** a WAV, AIFF, FLAC, MP3 320 y AAC 256, conservando etiquetas y carátula, con normalización opcional de loudness (−14, −9, −23 LUFS…).
 - **Búsqueda** en SoundCloud e **historial**.
 - **Pre-escucha** antes de descargar, desde la búsqueda o pegando el enlace (con la sesión de SoundCloud, el tema entero; se puede saltar a cualquier punto).
-- yt-dlp **se actualiza desde la propia app**.
+- yt-dlp **se actualiza desde la propia app**, y la app avisa cuando hay una versión nueva en GitHub (y la descarga si se lo pides; se puede desactivar en Ajustes).
 
 ## Escritorio
 

@@ -24,6 +24,9 @@ DEFAULTS = {
     "skip_downloaded": True,
     "detect_bpm_key": True,
     "colormap": "inferno",
+    "check_updates": True,
+    "auto_download_updates": False,
+    "skipped_version": "",
 }
 
 # On a server the music folder is fixed by the deployment, not by the page.
