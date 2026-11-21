@@ -17,6 +17,7 @@ hidden = (
 if sys.platform.startswith("linux"):
     hidden += collect_submodules("qtpy")
 datas = [(str(ROOT / "freethenoize" / "ui"), "freethenoize/ui")]
+ICON = ROOT / "packaging" / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
 datas += collect_data_files("imageio_ffmpeg")
 binaries = []
 
@@ -36,6 +37,7 @@ exe = EXE(
     name=APP,
     console=False,
     upx=False,
+    icon=str(ICON),
 )
 coll = COLLECT(exe, a.binaries, a.datas, name=APP, upx=False)
 
@@ -43,9 +45,10 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name=f"{APP}.app",
+        icon=str(ICON),
         bundle_identifier="io.github.quim-d.freethenoize",
         info_plist={
-            "CFBundleShortVersionString": "3.0.1",
+            "CFBundleShortVersionString": "3.0.2",
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.music",
         },

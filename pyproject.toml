@@ -1,6 +1,6 @@
 [project]
 name = "freethenoize"
-version = "3.0.1"
+version = "3.0.2"
 description = "FreeTheNoize — descarga SoundCloud a la máxima calidad disponible, con espectrograma, BPM/tonalidad y comparador. App de escritorio o servicio web."
 readme = "README.md"
 license-files = ["LICENSE"]
