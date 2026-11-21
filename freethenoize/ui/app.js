@@ -346,6 +346,26 @@
   $('#clear-finished').addEventListener('click', () => POST('/api/downloads/clear'));
   $('#cancel-all').addEventListener('click', () => POST('/api/downloads/cancel-all'));
 
+  // ── Pre-listen ─────────────────────────────────────────────────────────
+
+  async function preview(url, btn) {
+    if (btn) btn.classList.add('busy');
+    const t = toast('Cargando pre-escucha…', '', 0);
+    try {
+      const p = await POST('/api/preview', { text: url });
+      player.play({ stream: { url: p.url, duration: p.duration || 0 }, title: p.title,
+        sub: [p.uploader, p.snippet ? 'solo fragmento de 30 s' : 'pre-escucha'].filter(Boolean).join(' · '),
+        cover: p.thumbnail });
+    } catch (_) { /* POST already showed the error */ }
+    finally { t.remove && t.remove(); if (btn) btn.classList.remove('busy'); }
+  }
+
+  $('#preview-btn').addEventListener('click', (e) => {
+    const url = (urlInput.value.match(/https?:\/\/\S+/) || [])[0];
+    if (!url) { toast('Pega primero el enlace de un tema.', 'error'); return; }
+    preview(url, e.currentTarget);
+  });
+
   // ── Search ─────────────────────────────────────────────────────────────
 
   $('#search-form').addEventListener('submit', async (e) => {
@@ -365,6 +385,7 @@
           h('div', { class: 'title' }, r.title),
           h('div', { class: 'sub' }, [r.uploader, r.duration && fmtTime(r.duration)].filter(Boolean).join(' · '))),
         h('div', { class: 'actions' },
+          iconBtn('play', 'Pre-escuchar', (ev) => preview(r.url, ev.currentTarget)),
           iconBtn('link', 'Abrir en SoundCloud', () => openUrl(r.url)),
           h('button', { class: 'btn small primary', onclick: async (ev) => {
             if (await submitUrls(r.url)) { ev.target.textContent = 'En cola'; ev.target.disabled = true; }
@@ -501,10 +522,12 @@
   const player = {
     audio: $('#pl-audio'),
     current: null,
-    play({ path, title, sub, cover }) {
+    stream: null,
+    play({ path, stream, title, sub, cover }) {
       anAudio.pause();
       ab.stop && ab.playing && ab.stop();
-      this.current = path;
+      this.stream = stream ? { ...stream, offset: 0 } : null;
+      this.current = stream ? stream.url : path;
       $('#pl-title').textContent = title || baseName(path);
       this._sub = sub || '';
       $('#pl-sub').textContent = this._sub;
@@ -516,7 +539,13 @@
       document.body.classList.add('has-player');
       $$('#lib-body tr').forEach((tr) => tr.classList.toggle('playing', tr.dataset.path === path));
     },
+    _streamAt(t) {
+      this.stream.offset = t;
+      this.audio.src = `${this.stream.url}?t=${t.toFixed(1)}`;
+      this.audio.play().catch(() => {});
+    },
     async _load(path) {
+      if (this.stream) { this._streamAt(0); return; }
       // AIFF, Opus, FLAC… are transcoded on the server so every browser plays them.
       const direct = /\.(mp3|m4a|aac|wav)$/i.test(path);
       let url = '/api/stream?path=' + q(path);
@@ -543,12 +572,24 @@
   $('#pl-close').addEventListener('click', () => player.close());
   player.audio.addEventListener('play', () => plIcon('pause'));
   player.audio.addEventListener('pause', () => plIcon('play'));
+  // Pre-listening streams come from ffmpeg on the fly: no length, and seeking
+  // asks the server to start again at that second.
+  const plPos = () => {
+    const a = player.audio, st = player.stream;
+    return st ? { cur: st.offset + a.currentTime, dur: st.duration }
+      : { cur: a.currentTime, dur: Number.isFinite(a.duration) ? a.duration : 0 };
+  };
   player.audio.addEventListener('timeupdate', () => {
-    const a = player.audio;
-    if (a.duration) $('#pl-seek').value = (a.currentTime / a.duration) * 1000;
-    $('#pl-time').textContent = fmtTime(a.currentTime) + (a.duration ? ' / ' + fmtTime(a.duration) : '');
+    const { cur, dur } = plPos();
+    if (dur) $('#pl-seek').value = (cur / dur) * 1000;
+    $('#pl-time').textContent = fmtTime(cur) + (dur ? ' / ' + fmtTime(dur) : '');
   });
-  $('#pl-seek').addEventListener('input', (e) => { const a = player.audio; if (a.duration) a.currentTime = (e.target.value / 1000) * a.duration; });
+  $('#pl-seek').addEventListener('change', (e) => {
+    const { dur } = plPos();
+    if (!dur) return;
+    const t = (e.target.value / 1000) * dur;
+    if (player.stream) player._streamAt(t); else player.audio.currentTime = t;
+  });
 
   // ── Spectrogram view ───────────────────────────────────────────────────
 

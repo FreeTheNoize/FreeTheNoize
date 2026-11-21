@@ -240,6 +240,19 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
     def search(q: str = ""):
         return core.search(q)
 
+    @app.post("/api/preview")
+    def preview(body: Text):
+        return core.preview(body.text)
+
+    @app.get("/api/preview/{name}")
+    def preview_audio(name: str, t: float = 0):
+        try:
+            chunks = core.previews.stream(Path(name).stem, max(t, 0))
+        except KeyError:
+            raise HTTPException(404)
+        return StreamingResponse(chunks, media_type="audio/mpeg",
+                                 headers={"Cache-Control": "no-store"})
+
     # ── Subscriptions ─────────────────────────────────────────────────────
 
     @app.get("/api/subscriptions")
