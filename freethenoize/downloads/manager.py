@@ -102,6 +102,11 @@ class _Logger:
     info = debug
 
     def warning(self, msg):
+        # The desktop builds ship ffmpeg without ffprobe. yt-dlp then can't
+        # probe an HLS download, assumes it needs fixing and remuxes it with
+        # ffmpeg anyway, so the result is the same: not worth showing.
+        if "ffprobe" in str(msg):
+            return
         if len(self.job.warnings) < 5:
             self.job.warnings.append(str(msg).removeprefix("WARNING: "))
 

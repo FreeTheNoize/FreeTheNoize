@@ -48,7 +48,7 @@ if sys.platform == "darwin":
         icon=str(ICON),
         bundle_identifier="io.github.quim-d.freethenoize",
         info_plist={
-            "CFBundleShortVersionString": "3.0.2",
+            "CFBundleShortVersionString": "3.0.3",
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.music",
         },
