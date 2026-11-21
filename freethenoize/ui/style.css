@@ -471,3 +471,7 @@ body.has-player .toasts { bottom: 86px; }
   .lib .fmt, .lib th:nth-child(5), .lib td:nth-child(5), .lib th:nth-child(6), .lib td:nth-child(6) { display: none; }
   .ab-bar .seek { order: 10; flex-basis: 100%; }
 }
+
+/* Pre-listen button while the stream is being resolved */
+.btn.busy { opacity: .55; pointer-events: none; animation: ftn-blink .8s steps(2) infinite; }
+@keyframes ftn-blink { 50% { opacity: .25; } }

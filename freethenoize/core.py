@@ -26,6 +26,7 @@ from .downloads.resolve import search_soundcloud
 from .events import EventBus
 from .library import AUDIO_EXTS, Library
 from .paths import AUDIO_CACHE_DIR, UPLOAD_DIR
+from .preview import Previews
 from .subscriptions import Subscriptions
 
 _URL = re.compile(r"https?://\S+")
@@ -43,6 +44,7 @@ class Core:
         self.downloads = dl.DownloadManager(self.settings, self.emit)
         self.subscriptions = Subscriptions(self.downloads, self.emit)
         self.library = Library()
+        self.previews = Previews(self.downloads.base_params)
         self._audio: dict[str, Path] = {}
         self._audio_lock = threading.Lock()
         self._sc_username: str | None = None
@@ -170,6 +172,9 @@ class Core:
         if not query:
             return []
         return search_soundcloud(query, 24, {"quiet": True, "no_warnings": True})
+
+    def preview(self, url: str) -> dict:
+        return self.previews.resolve(url)
 
     def history(self) -> list[dict]:
         return dl.read_history()

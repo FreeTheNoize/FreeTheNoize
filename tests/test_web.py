@@ -96,3 +96,10 @@ def test_library_stream_analyze(client):
     assert client.post("/api/analyze", json={"path": up["path"]}).status_code == 200
     assert client.delete("/api/library", params={"path": str(f)}).status_code == 200
     assert not f.exists()
+
+
+def test_preview_validation(client):
+    assert client.post("/api/preview", json={"text": "https://x"}).status_code == 401
+    login(client)
+    assert client.post("/api/preview", json={"text": "not a url"}).status_code == 400
+    assert client.get("/api/preview/nope.mp3").status_code == 404
