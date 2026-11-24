@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/logo.svg" alt="FreeTheNoize — SoundCloud · max quality · DJ ready" width="640">
+  <img src="assets/logo/logo.svg" alt="FreeTheNoize — SoundCloud · max quality · DJ ready" width="640">
 </p>
 
 <p align="center">
