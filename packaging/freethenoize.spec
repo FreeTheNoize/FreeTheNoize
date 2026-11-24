@@ -1,5 +1,6 @@
 # PyInstaller spec: desktop app for macOS (.app), Windows and Linux (folder + executable).
 #   pyinstaller packaging/freethenoize.spec --noconfirm
+import re
 import sys
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).parent
 APP = "FreeTheNoize"
+# Single source of truth for the version: freethenoize/__init__.py (bumped by release-please).
+VERSION = re.search(r'__version__ = "([^"]+)"', (ROOT / "freethenoize" / "__init__.py").read_text()).group(1)
 
 hidden = (
     collect_submodules("uvicorn")
@@ -48,7 +51,8 @@ if sys.platform == "darwin":
         icon=str(ICON),
         bundle_identifier="io.github.quim-d.freethenoize",
         info_plist={
-            "CFBundleShortVersionString": "3.1.0",
+            "CFBundleShortVersionString": VERSION,
+            "CFBundleVersion": VERSION,
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.music",
         },

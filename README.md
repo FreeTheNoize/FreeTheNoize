@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="docs/brand/logo.svg" alt="FreeTheNoize — SoundCloud · max quality · DJ ready" width="640">
+</p>
+
+<p align="center">
+  <a href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/FreeTheNoize/FreeTheNoize?color=c6ff00&labelColor=0a0a0a"></a>
+  <a href="https://github.com/FreeTheNoize/FreeTheNoize/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/FreeTheNoize/FreeTheNoize/actions/workflows/ci.yml/badge.svg?branch=develop"></a>
+  <a href="LICENSE"><img alt="Licencia GPL-2.0" src="https://img.shields.io/badge/licencia-GPL--2.0-c6ff00?labelColor=0a0a0a"></a>
+  <a href="CONTRIBUTING.md"><img alt="PRs bienvenidas" src="https://img.shields.io/badge/PRs-bienvenidas-c6ff00?labelColor=0a0a0a"></a>
+</p>
+
 # FreeTheNoize
 
 Descarga música de SoundCloud a la **máxima calidad disponible**, comprueba qué calidad tiene de verdad y organízala para pinchar.
@@ -25,7 +36,7 @@ Funciona como **app de escritorio** (macOS Apple Silicon e Intel, Windows, Linux
 
 ## Escritorio
 
-Descarga la build de [Releases](../../releases) o, desde el código:
+Descarga la build de [Releases](https://github.com/FreeTheNoize/FreeTheNoize/releases/latest) o, desde el código:
 
 ```sh
 uv venv && uv pip install -e ".[desktop,dev]"
@@ -45,7 +56,7 @@ o sin compose:
 
 ```sh
 docker run -d -p 8765:8765 -e FTN_PASSWORD=algo-largo \
-  -v ./data:/data -v ./music:/music ghcr.io/quim-d/freethenoize
+  -v ./data:/data -v ./music:/music ghcr.io/freethenoize/freethenoize
 ```
 
 Sin Docker: `freethenoize serve --host 0.0.0.0 --port 8765 --music-dir ~/Música`.
@@ -67,9 +78,41 @@ En modo servicio solo se puede abrir lo que hay en la carpeta de música y lo qu
 freethenoize get https://soundcloud.com/usuario/sets/playlist -o ~/Música
 ```
 
+Para probar lo último de `develop`: `ghcr.io/freethenoize/freethenoize:edge`.
+
+## Comunidad
+
+FreeTheNoize es un proyecto **libre y horizontal**: no tiene dueño. Lo cuidan maintainers y contributors, que revisan el trabajo
+de los demás y deciden juntos quién entra
+([GOVERNANCE.md](GOVERNANCE.md)). El objetivo: que cualquier DJ pueda conseguir la mejor calidad que existe de lo que
+pincha, saber la verdad sobre esa calidad y tenerlo listo para la cabina, sin anuncios, sin cuentas y sin rastreo.
+
+- 💬 Ideas y dudas: [Discussions](https://github.com/FreeTheNoize/FreeTheNoize/discussions)
+- 🐛 Bugs y propuestas: [Issues](https://github.com/FreeTheNoize/FreeTheNoize/issues/new/choose)
+- 🔒 Fallos de seguridad: en privado, ver [SECURITY.md](SECURITY.md)
+
+## Cómo aportar
+
+Toda ayuda cuenta: código, probar versiones, reportar enlaces que fallan, revisar PR, traducir o mejorar esta documentación.
+La guía completa está en [CONTRIBUTING.md](CONTRIBUTING.md); lo esencial:
+
+1. **Habla antes de lo grande.** Para algo más que un arreglo pequeño, abre un issue o una Discussion primero.
+2. **Todo va a `develop`.** Haz la rama desde `develop` y abre la PR contra `develop`. Las PR directas a `main` se rechazan solas.
+3. **Título Conventional Commits**: `fix: …`, `feat: …`, `docs: …`. De ahí salen la versión y el CHANGELOG.
+4. **PR pequeñas y con tests.** Un propósito por PR; si cambias comportamiento, añade o ajusta tests.
+5. **1 aprobación de un maintainer o contributor** distinto de ti y los checks en verde (tests en Linux/macOS/Windows) para fusionar.
+   Nadie aprueba lo suyo, tampoco quien fundó el proyecto.
+6. **Respeta los principios**: nunca recodificar el audio, decir la verdad sobre la calidad, nada de telemetría ni
+   llamadas a terceros nuevas, y el modo servicio seguro por defecto.
+7. **Trato humano.** Aplica el [código de conducta](CODE_OF_CONDUCT.md) en todos los espacios del proyecto.
+
+Las releases las prepara un bot: cada cambio en `main` actualiza una PR de release con la versión y el CHANGELOG,
+y al aprobarla se publican los zips de escritorio y la imagen Docker. Detalles en [CONTRIBUTING.md › Releases](CONTRIBUTING.md#releases).
+
 ## Desarrollo
 
 ```sh
+git clone https://github.com/FreeTheNoize/FreeTheNoize && cd FreeTheNoize   # rama por defecto: develop
 uv venv && uv pip install -e ".[desktop,dev]"
 .venv/bin/python -m pytest
 .venv/bin/pyinstaller packaging/freethenoize.spec --noconfirm   # build de escritorio
@@ -90,6 +133,6 @@ freethenoize/
   ui/               HTML/CSS/JS sin build
 ```
 
-## Aviso
+## Licencia y aviso
 
-Para uso personal. Descargar contenido que el artista no ha puesto para descargar, o el audio de Go+, puede ir contra los términos de SoundCloud. Apoya a los artistas.
+[GPL-2.0-or-later](LICENSE). Para uso personal. Descargar contenido que el artista no ha puesto para descargar, o el audio de Go+, puede ir contra los términos de SoundCloud. Apoya a los artistas.

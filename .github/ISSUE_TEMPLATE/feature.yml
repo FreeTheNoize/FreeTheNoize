@@ -1,0 +1,24 @@
+name: Propuesta
+description: Una mejora o funcionalidad nueva
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qué problema resuelve
+      description: Cuéntalo desde el uso real (pinchar, organizar, comprobar calidad…).
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: Cómo lo harías
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: He buscado y no hay otro issue o Discussion igual.
+          required: true
+        - label: Encaja con el objetivo del proyecto (ver GOVERNANCE.md).
+          required: true
+        - label: Me gustaría hacerlo yo.

@@ -1,0 +1,51 @@
+# Checks on the pull request itself. Runs the base-branch version of this file
+# (pull_request_target) and never checks out PR code, so a PR can't change its own rules.
+name: PR
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title:
+    name: Conventional title
+    runs-on: ubuntu-latest
+    steps:
+      # The squash commit takes the PR title, and release-please builds the changelog from it.
+      - uses: amannn/action-semantic-pull-request@c5e23b7e584519ee15caa684cf60d056aa9f035f # v6.1.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+
+  source-branch:
+    name: Source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only develop, hotfix/* and release PRs can target main
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if [ "$BASE" != "main" ]; then echo "Target is $BASE: OK"; exit 0; fi
+          if [ "$SAME_REPO" = "true" ]; then
+            case "$HEAD" in
+              develop|hotfix/*|release-please--branches--main*) echo "$HEAD -> main: OK"; exit 0 ;;
+            esac
+          fi
+          echo "::error::No se aceptan PR directas a main. Abre la PR contra 'develop' (ver CONTRIBUTING.md)."
+          exit 1

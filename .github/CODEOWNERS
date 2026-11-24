@@ -1,2 +1,4 @@
-# Todo cambio en main necesita el visto bueno de @quim-d.
-* @quim-d
+# Cualquier persona de @FreeTheNoize/maintainers o @FreeTheNoize/contributors puede aprobar cualquier cambio.
+# Basta 1 aprobación de alguien distinto de quien abre la PR (nadie aprueba lo suyo).
+# Este fichero hace que GitHub pida revisión a los dos equipos automáticamente.
+*  @FreeTheNoize/maintainers @FreeTheNoize/contributors

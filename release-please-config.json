@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "Release propuesto por release-please. **Revísalo** (versión y CHANGELOG) y apruébalo: al fusionarlo se crean la etiqueta, la release, las builds de escritorio y la imagen Docker.",
+  "changelog-sections": [
+    { "type": "feat", "section": "Novedades" },
+    { "type": "fix", "section": "Arreglos" },
+    { "type": "perf", "section": "Rendimiento" },
+    { "type": "revert", "section": "Reversiones" },
+    { "type": "docs", "section": "Documentación", "hidden": true },
+    { "type": "refactor", "section": "Refactor", "hidden": true },
+    { "type": "build", "section": "Build y dependencias", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "chore", "section": "Varios", "hidden": true }
+  ],
+  "packages": {
+    ".": { "package-name": "freethenoize" }
+  }
+}

@@ -1,70 +1,119 @@
-name: Desktop builds
+# Release flow (see CONTRIBUTING.md › Releases):
+#  1. Every push to main updates the "release PR" that release-please keeps open:
+#     next version (from the Conventional Commit titles) + CHANGELOG. That PR is the release review.
+#  2. Merging it (1 approval) creates the vX.Y.Z tag and the GitHub release,
+#     builds the desktop zips and the Docker image, and attaches/publishes them.
+#  3. Opens a back-merge PR main → develop so develop gets the version bump and the changelog.
+name: Release
 on:
   push:
-    tags: ["v*"]
-  pull_request:
-    paths:
-      - "packaging/**"
-      - ".github/workflows/release.yml"
-      - "pyproject.toml"
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rebuild and re-attach the assets of an existing release tag (vX.Y.Z)"
+        required: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            artifact: FreeTheNoize-macOS-AppleSilicon.zip
-          - os: macos-15-intel
-            artifact: FreeTheNoize-macOS-Intel.zip
-          - os: windows-latest
-            artifact: FreeTheNoize-Windows-x64.zip
-          - os: ubuntu-22.04
-            artifact: FreeTheNoize-Linux-x64.zip
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      created: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v7
+      # Bot token (GitHub App) so the release PR triggers the required checks.
+      # Without the App it falls back to GITHUB_TOKEN: then close and reopen the release PR to run them.
+      - id: app
+        if: vars.BOT_CLIENT_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          python-version: "3.13"
-          activate-environment: true
-      - run: uv pip install -e ".[desktop,dev]"
-      - run: pyinstaller packaging/freethenoize.spec --noconfirm
-      - name: Smoke test (serve mode)
-        shell: bash
+          client-id: ${{ vars.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+      - id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  inputs:
+    name: Release to build
+    needs: release-please
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.created == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          TAG: ${{ inputs.tag || needs.release-please.outputs.tag }}
         run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then BIN=dist/FreeTheNoize.app/Contents/MacOS/FreeTheNoize
-          elif [ "$RUNNER_OS" = "Windows" ]; then BIN=dist/FreeTheNoize/FreeTheNoize.exe
-          else BIN=dist/FreeTheNoize/FreeTheNoize; fi
-          FTN_DATA_DIR="$RUNNER_TEMP/ftn" "$BIN" serve --port 8799 --password x &
-          for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8799/api/health && exit 0
-            sleep 1
-          done
-          echo "server did not start"; exit 1
-      - name: Zip (macOS)
-        if: runner.os == 'macOS'
-        run: cd dist && ditto -c -k --keepParent FreeTheNoize.app ../${{ matrix.artifact }}
-      - name: Zip (Windows)
-        if: runner.os == 'Windows'
-        run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
-      - name: Zip (Linux)
-        if: runner.os == 'Linux'
-        run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
-      - uses: actions/upload-artifact@v4
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad tag '$TAG'"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    needs: inputs
+    if: always() && needs.inputs.result == 'success'
+    uses: ./.github/workflows/desktop.yml
+    with:
+      tag: ${{ needs.inputs.outputs.tag }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  docker:
+    needs: inputs
+    if: always() && needs.inputs.result == 'success'
+    uses: ./.github/workflows/docker.yml
+    with:
+      version: ${{ needs.inputs.outputs.version }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+  back-merge:
+    name: Back-merge main → develop
+    needs: [release-please, desktop, docker]
+    if: always() && needs.release-please.outputs.created == 'true' && needs.desktop.result == 'success' && needs.docker.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - id: app
+        if: vars.BOT_CLIENT_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-          compression-level: 0
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.artifact }}
-          generate_release_notes: true
+          client-id: ${{ vars.BOT_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+      - name: Open PR main → develop
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: |
+          if gh pr list -R "$GITHUB_REPOSITORY" --base develop --head main --state open --json number --jq '.[0].number' | grep -q .; then
+            echo "A back-merge PR is already open"; exit 0
+          fi
+          gh pr create -R "$GITHUB_REPOSITORY" --base develop --head main \
+            --title "chore: back-merge $TAG into develop" \
+            --body "Trae a \`develop\` el cambio de versión y el CHANGELOG de **$TAG**. Fusionar con **merge commit** (no squash) para no desalinear las ramas." \
+            --label "release"

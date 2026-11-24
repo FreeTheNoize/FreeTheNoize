@@ -17,7 +17,7 @@ from platformdirs import user_downloads_path
 
 from . import __version__, runtime
 
-REPO = "quim-d/FreeTheNoize"
+REPO = "FreeTheNoize/FreeTheNoize"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
 CHECK_EVERY = 6 * 3600
 FIRST_CHECK_DELAY = 8

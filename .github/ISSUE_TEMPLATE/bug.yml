@@ -1,0 +1,40 @@
+name: Bug
+description: Algo no funciona como debería
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasa
+      description: Qué hiciste, qué esperabas y qué ocurrió.
+    validations: { required: true }
+  - type: input
+    id: link
+    attributes:
+      label: Enlace que falla
+      description: El tema, playlist o perfil de SoundCloud, si aplica.
+  - type: input
+    id: version
+    attributes:
+      label: Versión
+      description: Aparece en Ajustes. Comprueba antes que es la última.
+      placeholder: "3.1.0"
+    validations: { required: true }
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Modo
+      options: [Escritorio, Servicio web (Docker), Servicio web (sin Docker), Terminal]
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema
+      options: [macOS Apple Silicon, macOS Intel, Windows, Linux, Otro]
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Registro o captura
+      description: Quita tokens, contraseñas y rutas personales antes de pegarlo.
+      render: text

@@ -1,0 +1,93 @@
+# Desktop builds (PyInstaller): macOS Apple Silicon/Intel, Windows x64, Linux x64.
+# On a release (called from release.yml) the zips are attached to the GitHub release.
+name: Desktop builds
+on:
+  pull_request:
+    paths: ["packaging/**", "pyproject.toml", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to attach the zips to (vX.Y.Z)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: FreeTheNoize-macOS-AppleSilicon.zip
+          - os: macos-15-intel
+            artifact: FreeTheNoize-macOS-Intel.zip
+          - os: windows-latest
+            artifact: FreeTheNoize-Windows-x64.zip
+          - os: ubuntu-22.04
+            artifact: FreeTheNoize-Linux-x64.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: "3.13"
+          activate-environment: true
+      - run: uv pip install -e ".[desktop,dev]"
+      - run: pyinstaller packaging/freethenoize.spec --noconfirm
+      - name: Smoke test (serve mode)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then BIN=dist/FreeTheNoize.app/Contents/MacOS/FreeTheNoize
+          elif [ "$RUNNER_OS" = "Windows" ]; then BIN=dist/FreeTheNoize/FreeTheNoize.exe
+          else BIN=dist/FreeTheNoize/FreeTheNoize; fi
+          FTN_DATA_DIR="$RUNNER_TEMP/ftn" "$BIN" serve --port 8799 --password x &
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8799/api/health && exit 0
+            sleep 1
+          done
+          echo "server did not start"; exit 1
+      - name: Zip (macOS)
+        if: runner.os == 'macOS'
+        run: cd dist && ditto -c -k --keepParent FreeTheNoize.app ../${{ matrix.artifact }}
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          compression-level: 0
+
+  attach:
+    name: Attach to release
+    if: inputs.tag != ''
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - run: (cd dist && sha256sum -- *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.zip
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
