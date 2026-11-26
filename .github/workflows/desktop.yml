@@ -96,40 +96,52 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Move-Item dist\FreeTheNoize-Windows-x64-Setup.exe .
           Get-Item FreeTheNoize-Windows-x64-Setup.exe | Select Name, Length
-      # As a user would: downloaded (marked), per-user install without admin,
-      # the installed app starts, upgrade over itself, uninstall cleans up.
-      - name: Installer smoke test (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
-          Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
-          $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
-          function Install { $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait -PassThru; if ($p.ExitCode) { "install failed: $($p.ExitCode)"; exit 1 } }
-          Install
-          if (-not (Test-Path "$app\FreeTheNoize.exe")) { "not installed in $app"; exit 1 }
-          $marked = Get-ChildItem $app -Recurse -File | Get-Item -Stream Zone.Identifier -ErrorAction SilentlyContinue
-          if ($marked) { "installed files carry the download mark:"; $marked.FileName; exit 1 }
-          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-setup"
-          $p = Start-Process "$app\FreeTheNoize.exe" -ArgumentList 'serve','--port','8796','--password','x' -PassThru
-          $ok = $false
-          foreach ($i in 1..60) { try { Invoke-RestMethod http://127.0.0.1:8796/api/health | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
-          Stop-Process $p -Force -ErrorAction SilentlyContinue
-          if (-not $ok) { "installed app did not start"; exit 1 }
-          Start-Sleep 2
-          Install  # upgrade in place
-          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
-          $p = Start-Process $un.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($p.ExitCode) { "uninstall failed: $($p.ExitCode)"; exit 1 }
-          Start-Sleep 3
-          if (Test-Path "$app\FreeTheNoize.exe") { "uninstall left the app behind"; exit 1 }
-          "installer OK"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'Windows'
         with:
           name: FreeTheNoize-Windows-x64-Setup.exe
           path: FreeTheNoize-Windows-x64-Setup.exe
           compression-level: 0
+      # As a user would: downloaded (marked), per-user install without admin,
+      # the installed app starts, upgrade over itself, uninstall cleans up.
+      - name: Installer smoke test (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
+          Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
+          function Run([string]$exe, [string[]]$argv, [string]$what) {
+            "== $what"
+            $p = Start-Process $exe -ArgumentList $argv -PassThru
+            if (-not $p.WaitForExit(240000)) { "$what: still running after 4 min"; Get-Process | Where-Object { $_.Path -like "*FreeTheNoize*" -or $_.Name -like "*unins*" -or $_.Name -like "*Setup*" } | Format-Table Id, Name, Path -AutoSize | Out-String; exit 1 }
+            if ($p.ExitCode) { "$what failed: $($p.ExitCode)"; exit 1 }
+          }
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=$env:RUNNER_TEMP\setup1.log") 'install'
+          if (-not (Test-Path "$app\FreeTheNoize.exe")) { "not installed in $app"; exit 1 }
+          $marked = Get-ChildItem $app -Recurse -File | ForEach-Object { Get-Item -LiteralPath $_.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue }
+          if ($marked) { "installed files carry the download mark:"; $marked.FileName; exit 1 }
+          "== installed app starts"
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-setup"
+          $p = Start-Process "$app\FreeTheNoize.exe" -ArgumentList 'serve', '--port', '8796', '--password', 'x' -PassThru
+          $ok = $false
+          foreach ($i in 1..60) { try { Invoke-RestMethod http://127.0.0.1:8796/api/health -TimeoutSec 2 | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process FreeTheNoize -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $ok) { "installed app did not start"; exit 1 }
+          Start-Sleep 2
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=$env:RUNNER_TEMP\setup2.log") 'upgrade in place'
+          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
+          Run $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'uninstall'
+          foreach ($i in 1..20) { if (-not (Test-Path "$app\FreeTheNoize.exe")) { break }; Start-Sleep 1 }
+          if (Test-Path "$app\FreeTheNoize.exe") { "uninstall left the app behind"; exit 1 }
+          "installer OK"
+      - name: Installer logs (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: Get-ChildItem $env:RUNNER_TEMP -Filter 'setup*.log' -ErrorAction SilentlyContinue | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName -Tail 60 }
       - name: Zip (Linux)
         if: runner.os == 'Linux'
         run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
