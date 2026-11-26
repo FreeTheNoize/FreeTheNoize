@@ -38,7 +38,7 @@ def asset_name() -> str | None:
         return "FreeTheNoize-macOS-AppleSilicon.zip" if machine in ("arm64", "aarch64") \
             else "FreeTheNoize-macOS-Intel.zip"
     if sys.platform == "win32":
-        return "FreeTheNoize-Windows-x64.zip"
+        return "FreeTheNoize-Windows-x64-Portable.zip"
     if sys.platform.startswith("linux") and machine in ("x86_64", "amd64"):
         return "FreeTheNoize-Linux-x64.zip"
     return None
