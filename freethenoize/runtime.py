@@ -49,3 +49,24 @@ def ensure_std_streams() -> None:
         sys.stdout = stream
     if sys.stderr is None:
         sys.stderr = stream
+
+
+def unblock_bundled_dlls() -> None:
+    """Remove the Mark of the Web from the app's own DLLs (Windows build).
+
+    Explorer copies the "downloaded from the Internet" mark (Zone.Identifier)
+    from a downloaded zip to every file it extracts. .NET Framework refuses to
+    load marked assemblies, so pythonnet and WebView2 fail ("Failed to resolve
+    Python.Runtime.Loader.Initialize") and there is no native window. The user
+    already chose to run this app; its bundled DLLs get the same trust.
+    """
+    base = getattr(sys, "_MEIPASS", None)
+    if sys.platform != "win32" or not base:
+        return
+    for root, _dirs, files in os.walk(base):
+        for name in files:
+            if name.lower().endswith(".dll"):
+                try:
+                    os.remove(os.path.join(root, name) + ":Zone.Identifier")
+                except OSError:
+                    pass  # not marked, or read-only install: nothing to do

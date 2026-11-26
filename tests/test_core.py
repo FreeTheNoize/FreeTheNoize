@@ -172,3 +172,28 @@ def test_windowed_build_without_std_streams_starts(monkeypatch, tmp_path):
     finally:
         sys.stdout.close()
     assert (tmp_path / "freethenoize.log").read_text(encoding="utf-8") == "hola\n"
+
+
+def test_single_desktop_instance(monkeypatch, tmp_path):
+    """A second launch finds the first one and asks it to show its window."""
+    import threading
+
+    from freethenoize import instance
+
+    monkeypatch.setattr(instance, "INFO_FILE", tmp_path / "instance.json")
+    monkeypatch.setattr(instance, "_LOCK_FILE", tmp_path / "desktop.lock")
+    monkeypatch.setattr(instance, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(instance, "_held", None)
+    shown = threading.Event()
+
+    assert instance.acquire()
+    instance.serve(shown.set)
+    held = instance._held
+    try:
+        # Same process: a new lock attempt sees the one already held.
+        monkeypatch.setattr(instance, "_held", None)
+        assert not instance.acquire()
+        assert instance.show_running()
+        assert shown.wait(2)
+    finally:
+        instance._held = held

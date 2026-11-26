@@ -69,6 +69,29 @@ jobs:
           }
           Get-Content "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log" -ErrorAction SilentlyContinue
           "server did not start without console streams"; exit 1
+      - name: CLI exe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: dist\FreeTheNoize\ftn.exe --version
+      # Explorer marks every file extracted from a downloaded zip (Zone.Identifier);
+      # .NET then refuses pythonnet/WebView2 and the app fell back to the browser.
+      - name: Native window with downloaded-zip marks (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\FreeTheNoize -Recurse -Include *.dll | ForEach-Object {
+            Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-motw"
+          $log = "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $p = Start-Process dist\FreeTheNoize\FreeTheNoize.exe -PassThru
+          Start-Sleep 40
+          $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
+          Stop-Process $p -Force -ErrorAction SilentlyContinue
+          $text
+          if ($text -match "No se pudo abrir la ventana|Failed to resolve") { "native window failed"; exit 1 }
+          if ($p.HasExited -and $p.ExitCode -ne $null -and $p.ExitCode -ne -1) { "app exited ($($p.ExitCode))"; exit 1 }
       - name: Qt window backend is bundled (Linux)
         if: runner.os == 'Linux'
         run: |

@@ -80,6 +80,17 @@ class NativeBridge:
 
 
 def run():
+    from . import instance, runtime
+
+    # Already open: bring that window to the front instead of a second app.
+    if not instance.acquire():
+        if instance.show_running():
+            return 0
+        print("FreeTheNoize ya está abierto, pero no responde.")
+        return 1
+
+    runtime.unblock_bundled_dlls()  # before pywebview loads .NET (Windows)
+
     import uvicorn
     import webview
 
@@ -112,6 +123,21 @@ def run():
     bridge._window = window
     from . import popups
 
+    url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
+    in_browser = threading.Event()
+
+    def on_show():
+        if in_browser.is_set():
+            import webbrowser
+
+            webbrowser.open(url)
+            return
+        window.restore()
+        window.show()
+        window.on_top = True  # raise above other windows, then behave normally
+        window.on_top = False
+
+    instance.serve(on_show)
     popups.install()
     try:
         webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False,
@@ -121,7 +147,7 @@ def run():
         # keep the server running and use the default browser instead.
         import webbrowser
 
-        url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
+        in_browser.set()
         print(f"No se pudo abrir la ventana ({exc}). Abriendo en el navegador: {url}")
         print("Ctrl+C para salir.")
         webbrowser.open(url)
