@@ -47,7 +47,7 @@ LicenseFile=..\..\LICENSE
 WizardStyle=modern
 ; No language prompt: it blocked silent installs. Uses the Windows UI language.
 ShowLanguageDialog=no
-Compression=lzma2/max
+Compression=lzma2/ultra64
 SolidCompression=yes
 ; Close a running FreeTheNoize before replacing its files (Restart Manager).
 CloseApplications=yes

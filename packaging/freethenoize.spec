@@ -31,7 +31,8 @@ QT_UNUSED = [
     "QtSpatialAudio", "QtSql", "QtStateMachine", "QtSvgWidgets", "QtTest", "QtTextToSpeech", "QtUiTools",
     "QtWebSockets", "QtXml", "uic",
 ]
-excludes = ["tkinter", "matplotlib", "IPython", "pytest"]
+excludes = ["tkinter", "matplotlib", "IPython", "pytest", "setuptools", "pkg_resources",
+            "pydoc", "doctest", "lib2to3", "xmlrpc"]
 if sys.platform.startswith("linux"):
     hidden += [f"qtpy.{m}" for m in QT_USED]
     excludes += [f"{pkg}.{m}" for pkg in ("qtpy", "PyQt6") for m in QT_UNUSED] + ["PyQt5", "PySide2", "PySide6"]

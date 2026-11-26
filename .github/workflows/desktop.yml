@@ -25,10 +25,13 @@ jobs:
         include:
           - os: macos-latest
             artifact: FreeTheNoize-macOS-AppleSilicon.zip
+            budget_mb: 70
           - os: macos-15-intel
             artifact: FreeTheNoize-macOS-Intel.zip
+            budget_mb: 70
           - os: windows-latest
             artifact: FreeTheNoize-Windows-x64-Portable.zip
+            budget_mb: 80
           - os: ubuntu-22.04
             artifact: FreeTheNoize-Linux-x64.zip
     runs-on: ${{ matrix.os }}
@@ -63,6 +66,22 @@ jobs:
         run: |
           codesign --verify --deep --strict --verbose=2 dist/FreeTheNoize.app
           codesign -dv dist/FreeTheNoize.app 2>&1 | grep -q '^Signature=adhoc'
+      # A heavy dependency slipping in shows up here, not in a user's download.
+      - name: Size budget
+        if: env.FTN_FFMPEG != '' && matrix.budget_mb
+        shell: bash
+        run: |
+          python - "${{ matrix.budget_mb }}" <<'PY'
+          import os, sys
+          root = "dist/FreeTheNoize.app" if os.path.isdir("dist/FreeTheNoize.app") else "dist/FreeTheNoize"
+          size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(root) for f in fs
+                     if not os.path.islink(os.path.join(d, f))) / 1e6
+          budget = float(sys.argv[1])
+          print(f"{root}: {size:.1f} MB (budget {budget:.0f} MB)")
+          if size > budget:
+              sys.exit(f"::error::{root} is {size:.1f} MB, over the {budget:.0f} MB budget. "
+                       "A new dependency? Check what grew (du -sh dist/*/_internal/*) before raising it.")
+          PY
       - name: Smoke test (serve mode)
         shell: bash
         run: |
@@ -105,7 +124,7 @@ jobs:
           DMG="${ZIP%.zip}.dmg"
           mkdir -p dmg && cp -R dist/FreeTheNoize.app dmg/ && ln -s /Applications dmg/Aplicaciones
           cp packaging/macos/LEEME.txt "dmg/Si macOS no deja abrirla.txt"
-          hdiutil create -volname FreeTheNoize -srcfolder dmg -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG"
+          hdiutil create -volname FreeTheNoize -srcfolder dmg -fs HFS+ -format ULMO -ov "$DMG"
           # The image mounts and holds a launchable app.
           MNT=$(hdiutil attach -nobrowse -readonly "$DMG" | awk -F'\t' '/\/Volumes\//{print $NF}')
           test -x "$MNT/FreeTheNoize.app/Contents/MacOS/FreeTheNoize"
