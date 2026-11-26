@@ -1,20 +1,16 @@
 """tools/new_plugin.py creates a plugin that loads, serves its API and UI, and
 follows the same rules as the built-in ones."""
-import importlib.util
 import re
 import sys
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from conftest import login
+from conftest import ROOT, load_tool, login
 from freethenoize import plugins
 from freethenoize.web import Auth, create_app
 
-ROOT = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("new_plugin", ROOT / "tools" / "new_plugin.py")
-new_plugin = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(new_plugin)
+new_plugin = load_tool("new_plugin")
+check_architecture = load_tool("check_architecture")
 
 
 def test_scaffold_registers_in_builtin(tmp_path):
@@ -43,7 +39,7 @@ def test_scaffolded_plugin_works(tmp_path, kernel_factory, monkeypatch):
     assert c.get("/plugins/demo_tool/demo_tool.js").status_code == 200
     assert "/plugins/demo_tool/demo_tool.js" in c.get("/").text
 
-    # Same rule as the built-ins: no imports from other plugins.
-    for f in (pkg / "demo_tool").glob("*.py"):
-        text = f.read_text()
-        assert "freethenoize.plugins" not in text and not re.search(r"from \.\.(?!\.)", text), f
+    # The generated code passes the architecture check, like the built-ins.
+    for f in [*(pkg / "demo_tool").glob("*.py"), *(pkg / "demo_tool").glob("ui/*.js")]:
+        rel = "freethenoize/plugins/demo_tool/" + f.relative_to(pkg / "demo_tool").as_posix()
+        assert check_architecture.check_source(rel, f.read_text()) == [], rel

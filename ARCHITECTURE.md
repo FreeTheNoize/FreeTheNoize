@@ -87,17 +87,19 @@ El servicio puede tener `start()`, `stop()` y `state() -> dict`. Lo que devuelve
 | `ctx.ytdlp_params(url)` | Parámetros base de yt-dlp: ffmpeg, reintentos y la sesión de SoundCloud. |
 | `ctx.log` | Logger `freethenoize.<id>`. |
 
-### Reglas que comprueban los tests
+### Lo que comprueban los tests
 
-`tests/test_plugins.py` falla si se rompen:
+`tests/test_plugins.py` arranca el kernel y falla si:
 
-- El kernel no importa ningún complemento, y ningún complemento importa a otro.
-- Cada complemento se puede desactivar (Ajustes › complementos): sus rutas y su UI desaparecen, los que lo
-  necesitan quedan «no disponible» y el resto sigue funcionando.
-- Un complemento que no carga o que revienta al arrancar no tumba la app.
-- Las rutas viven en `/api/<id>/…` y la UI en `/plugins/<id>/…`; los ids de vista no se repiten.
-- Los eventos llevan el prefijo `<id>.` y los ajustes el espacio `<id>.`; los límites se aplican.
-- Los ajustes y ficheros de versiones anteriores se migran solos.
+- Algún complemento no se puede desactivar (Ajustes › complementos): al apagarlo, sus rutas y su UI desaparecen,
+  los que lo necesitan quedan «no disponible» y el resto sigue funcionando.
+- Un complemento que no carga o que revienta al arrancar tumba la app.
+- Hay rutas fuera de `/api/<id>/…` o UI fuera de `/plugins/<id>/…`.
+- Los eventos no llevan el prefijo `<id>.`, los ajustes no van en su espacio `<id>.` o no se aplican los límites.
+- Los ajustes y ficheros de versiones anteriores no se migran solos.
+
+Las reglas sobre el código (quién importa a quién, prefijos, rutas, la página…) las comprueba
+`tools/check_architecture.py`: ver [Reglas del framework](#reglas-del-framework).
 
 ### Rutas que vienen de la página: `LibraryPath`
 
@@ -151,7 +153,7 @@ kernel inserta en la página después de `kernel.js`.
 | `provide(nombre, fn)`, `use(nombre)` | Acciones que un complemento ofrece a otros sin importarlos: `downloads.add`, `preview`, `analysis.open`, `files.open`, `links.add`. `use` devuelve `undefined` si nadie la ofrece: la UI debe funcionar igual. |
 | `addTicker(fn)`, `setBadge(vista, n)` | Contadores de la barra superior y del menú. |
 | `state`, `saveSetting(clave, valor)` | Estado de `/api/state` y guardar un ajuste (`'<id>.clave'`). |
-| `GET/POST/PATCH/DEL`, `q` | HTTP con el error del servidor ya mostrado como aviso. |
+| `GET/POST/PATCH/DEL`, `getBytes`, `q` | HTTP con el error del servidor ya mostrado como aviso (`getBytes`: respuestas binarias, p. ej. audio para Web Audio). |
 | `native`, `pickAudio`, `pickFolder`, `uploadFiles`, `reveal`, `openUrl` | Diálogos nativos en escritorio y su equivalente en el navegador. |
 | `player`, `takeAudio(dueño)` | El reproductor común; `takeAudio` pausa el resto antes de sonar. |
 | `h`, `toast`, `iconBtn`, `art`, `badge`, `camChip`, `bpmChip`, `loadingBars`, `fmt*`… | Piezas de UI del sistema de diseño. |
@@ -159,6 +161,75 @@ kernel inserta en la página después de `kernel.js`.
 **Seguridad en la página**: `innerHTML` solo para plantillas estáticas (las `html:` de las vistas) e iconos
 de `FTN.ICONS`. Todo lo que venga del usuario, del servidor o de SoundCloud se pinta con `h()`, que escapa el
 texto. CSS propio con prefijo de la vista (`.view[data-view=<id>] …`) o clases `<id>-…`.
+
+## Reglas del framework
+
+`tools/check_architecture.py` las comprueba sin dependencias (AST para Python, expresiones regulares para el JS
+de los complementos) y dice dónde y qué hacer:
+
+```
+freethenoize/plugins/convert/service.py:3: un complemento importa otro [plugin-imports-plugin] → ponlo en requires=(…) … (ARCHITECTURE.md#un-complemento-no-importa-otro)
+```
+
+Se ejecuta en tres sitios: en CI (check **architecture**, obligatorio para fusionar), tras cada edición de un
+agente de Claude Code (hook en `.claude/settings.json`) y, si quieres, antes de cada commit
+(`pre-commit install`). A mano: `python tools/check_architecture.py [archivos…]`.
+
+### Un complemento no importa otro
+
+Ni `from ..downloads import …` ni `import freethenoize.plugins.<otro>`. Si necesitas otro complemento, ponlo en
+`requires=("downloads",)` y pide su servicio con `ctx.require("downloads")`; así el kernel lo arranca antes y,
+si está apagado, el tuyo queda «no disponible» en vez de romperse. En la página, `FTN.provide` / `FTN.use`.
+
+### El kernel no conoce los complementos
+
+Los ficheros de `freethenoize/` fuera de `plugins/` no importan ningún complemento ni escriben su nombre
+(`"downloads"`, `"downloads.job"`). La única lista es `plugins.BUILTIN`. Si una función necesita algo del kernel,
+se añade a `Ctx` (o a `FTN`) de forma genérica, en una PR aparte.
+
+### Eventos y ajustes con tu prefijo
+
+`ctx.emit("progress", …)` ya sale como `convert.progress`: no escribas el prefijo, ni el de otro. `ctx.settings`
+solo ve tus ajustes y sin prefijo (`ctx.settings["concurrency"]`); en la página se llaman `downloads.concurrency`.
+Para escuchar a otro complemento, `ctx.on("downloads.job", fn)`.
+
+### Tus ficheros en tu carpeta
+
+Lo que guarde un complemento va en `ctx.data_dir`, `ctx.cache_dir` o `ctx.data_file(nombre)`; la música, en
+`ctx.music_dir()` o donde diga el usuario. Nada de `freethenoize.paths`, `Path.home()` ni rutas escritas a mano.
+
+### Rutas de archivo con LibraryPath
+
+Todo campo o parámetro de una API que sea una ruta (`path`, `files`, `out_dir`, `dest`…) se declara
+`LibraryPath`, que la valida antes de llegar a tu código (ver [arriba](#rutas-que-vienen-de-la-página-librarypath)).
+
+### HTTP y DOM por FTN
+
+En la página, nada de `fetch()` directo: `FTN.GET/POST/PATCH/DEL` (o `FTN.getBytes`) ya llevan la sesión, el
+login y los avisos de error. Nada de `document.querySelector`/`getElementById`: busca dentro de tu vista con
+`FTN.$(selector, el)`, el `el` que recibe `init(el)`.
+
+### Nada de HTML con datos
+
+`innerHTML`, `outerHTML` e `insertAdjacentHTML` solo con plantillas fijas (sin `${…}`). Lo que lleve datos del
+usuario, del servidor o de SoundCloud se pinta con `FTN.h()`, que escapa el texto.
+
+### Sin scripts externos
+
+Ni CDN, ni `<script src="https://…">`, ni `import` de URLs: la app funciona sin conexión y no llama a terceros.
+
+### Vistas con id propio
+
+Cada vista tiene un id único en toda la app; no uses el id de otro complemento ni `settings`.
+
+### Excepciones
+
+Si una línea tiene un buen motivo para saltarse una regla, se dice en esa línea o en la de encima, y se explica
+en la PR:
+
+```python
+# ftn-arch: allow kernel-names-plugin — `get` vive aquí hasta que los complementos aporten sus comandos
+```
 
 ## Puertas de entrada
 

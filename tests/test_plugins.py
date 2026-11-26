@@ -1,36 +1,17 @@
 """The plugin contract: every plugin loads alone, can be switched off, stays
 inside its own routes, events, settings and files, and never imports another
 plugin. These tests guard the architecture (see ARCHITECTURE.md)."""
-import ast
 import json
 from pathlib import Path
 
 import pytest
-from conftest import login
+from conftest import load_tool, login
 
 from freethenoize import plugins
 from freethenoize.plugin import Plugin
 
 PKG = Path(__file__).parents[1] / "freethenoize"
-
-
-def _imports(path: Path) -> list[str]:
-    """Absolute dotted names imported by a module (relative ones resolved)."""
-    parts = path.relative_to(PKG.parent).with_suffix("").parts
-    package = ".".join(parts[:-1])  # a module's package; for __init__.py, the package itself
-    out = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            out += [a.name for a in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
-            if node.level:
-                parts = package.split(".")
-                parts = parts[: len(parts) - node.level + 1]
-                base = ".".join(parts + ([base] if base else []))
-            out.append(base)
-            out += [f"{base}.{a.name}" for a in node.names]
-    return out
+check_architecture = load_tool("check_architecture")
 
 
 def test_every_builtin_plugin_is_active(kernel_factory):
@@ -41,21 +22,11 @@ def test_every_builtin_plugin_is_active(kernel_factory):
         assert isinstance(p, Plugin) and p.title and p.description
 
 
-def test_kernel_never_imports_a_plugin():
-    for path in PKG.rglob("*.py"):
-        if "plugins" in path.relative_to(PKG).parts:
-            continue
-        for name in _imports(path):
-            assert not name.startswith("freethenoize.plugins."), f"{path.name} imports {name}"
-
-
-@pytest.mark.parametrize("pid", plugins.BUILTIN)
-def test_plugins_do_not_import_each_other(pid):
-    for path in (PKG / "plugins" / pid).rglob("*.py"):
-        for name in _imports(path):
-            if name.startswith("freethenoize.plugins."):
-                other = name.split(".")[2]
-                assert other == pid, f"{path.relative_to(PKG)} imports plugin {other}; use requires + ctx.require()"
+def test_code_follows_the_architecture():
+    """Imports between plugins, plugin names in the kernel, prefixes, paths, UI
+    rules: one source of truth, tools/check_architecture.py."""
+    problems = check_architecture.check()
+    assert not problems, "\n" + "\n".join(map(str, problems))
 
 
 @pytest.mark.parametrize("pid", plugins.BUILTIN)
@@ -93,16 +64,6 @@ def test_plugin_routes_and_ui_are_namespaced(client):
         if path.startswith("/api/"):
             first = path.split("/")[2]
             assert first in KERNEL_PREFIXES or first in plugins.BUILTIN, path
-
-
-def test_views_have_unique_ids():
-    import re
-
-    seen = {}
-    for js in (PKG / "plugins").glob("*/ui/*.js"):
-        for vid in re.findall(r"registerView\(\{\s*id: '([\w-]+)'", js.read_text(encoding="utf-8")):
-            assert vid not in seen, f"view {vid} in {js} and {seen[vid]}"
-            seen[vid] = js
 
 
 def test_ctx_prefixes_events_and_scopes_settings(kernel_factory):

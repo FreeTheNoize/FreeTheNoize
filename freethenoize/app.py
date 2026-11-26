@@ -40,6 +40,7 @@ def _get(args):
 
     kernel = Kernel()
     try:
+        # ftn-arch: allow kernel-names-plugin — `get` lives here until plugins bring their own CLI commands
         downloads = kernel.service("downloads")
     except KeyError:
         print("El complemento de descargas está desactivado.", file=sys.stderr)
@@ -53,12 +54,14 @@ def _get(args):
     def on_event(kind, p):
         nonlocal pending_links
         with lock:
+            # ftn-arch: allow kernel-names-plugin — same: the `get` command
             if kind == "downloads.resolving" and not p.get("active"):
                 pending_links -= 1
                 if p.get("error"):
                     print(f"✗ {p['url']}: {p['error']}", file=sys.stderr)
                 elif p.get("skipped"):
                     print(f"· {p.get('title') or p['url']}: {p['count']} nuevas, {p['skipped']} ya descargadas")
+            # ftn-arch: allow kernel-names-plugin
             elif kind == "downloads.job" and p["status"] in ("done", "skipped", "error", "cancelled"):
                 if p["id"] not in finished:
                     finished[p["id"]] = p["status"]

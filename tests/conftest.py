@@ -1,10 +1,23 @@
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def load_tool(name: str):
+    """Import tools/<name>.py (scripts, not a package)."""
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def make_kernel(tmp_path, monkeypatch, mode="server", plugin_ids=None, settings=None):

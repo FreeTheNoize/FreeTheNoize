@@ -76,6 +76,12 @@
   const POST = (u, b, o) => http('POST', u, b ?? {}, o);
   const PATCH = (u, b) => http('PATCH', u, b);
   const DEL = (u) => http('DELETE', u);
+  // Binary responses (audio for Web Audio…): same session, error shown as a toast.
+  async function getBytes(url) {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) { toast(res.statusText || 'No se ha podido leer el archivo.', 'error'); throw new HttpError(res.status, res.statusText); }
+    return res.arrayBuffer();
+  }
   const q = (path) => encodeURIComponent(path);
 
   // ── Native bridge (desktop window only) ────────────────────────────────
@@ -711,7 +717,7 @@
     // state & navigation
     state, isServer, show, isShown, setBadge, saveSetting, renderTicker,
     // HTTP & desktop bridge
-    http, GET, POST, PATCH, DEL, q, native, pickAudio, pickFolder, uploadFiles, reveal, openUrl,
+    http, GET, POST, PATCH, DEL, getBytes, q, native, pickAudio, pickFolder, uploadFiles, reveal, openUrl,
     // UI pieces
     $, $$, h, toast, ICONS, iconBtn, fileIcon, badge, camelotFromKey, camChip, bpmChip, art, loadingBars,
     bindSegmented, fmtBytes, num, baseName, fmtHz, fmtTime,

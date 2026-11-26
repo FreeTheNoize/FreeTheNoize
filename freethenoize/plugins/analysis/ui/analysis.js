@@ -1,7 +1,7 @@
 /* Plugin analysis: Espectro (one file) and A/B · Null (two versions).
  * Provides: 'analysis.open'(path), 'compare.add'(path), 'files.open'(paths) for dropped audio. */
 (function () {
-  const { $, $$, h, POST, toast, num, fmtHz, fmtTime, bindSegmented, baseName, pickAudio, saveSetting } = FTN;
+  const { $, $$, h, POST, getBytes, toast, num, fmtHz, fmtTime, bindSegmented, baseName, pickAudio, saveSetting } = FTN;
   const { SpectrogramView, CMAP_NAMES } = window.Spectro;
 
   const anAudio = h('audio', { preload: 'auto' });
@@ -257,7 +257,7 @@
       this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
       if (!keep) { this.buffers = {}; this.offsets = {}; this.pos = 0; }
       await Promise.all(Object.entries(urls).map(async ([k, url]) => {
-        const data = await (await fetch(url, { credentials: 'same-origin' })).arrayBuffer();
+        const data = await getBytes(url);
         this.buffers[k] = await this.ctx.decodeAudioData(data);
       }));
     },
