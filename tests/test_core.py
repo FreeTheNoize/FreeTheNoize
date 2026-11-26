@@ -188,15 +188,27 @@ def test_single_desktop_instance(monkeypatch, tmp_path):
     monkeypatch.setattr(instance, "_held", None)
     shown = threading.Event()
 
+    state = {"answer": "ok"}
+
+    def on_show():
+        shown.set()
+        return state["answer"]
+
     assert instance.acquire()
-    instance.serve(shown.set)
+    instance.serve(on_show)
     held = instance._held
     try:
         # Same process: a new lock attempt sees the one already held.
         monkeypatch.setattr(instance, "_held", None)
         assert not instance.acquire()
-        assert instance.show_running()
+        assert instance.show_running() == "ok"
         assert shown.wait(2)
+        # A second launch just leaves: no dialog, no second app.
+        assert instance.hand_over(timeout=2) is False
+        # While closing it waits instead (here it gives up after the timeout).
+        state["answer"] = "closing"
+        assert instance.show_running() == "closing"
+        assert instance.hand_over(timeout=0.5) is False
     finally:
         instance._held = held
 

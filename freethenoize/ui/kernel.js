@@ -635,6 +635,7 @@
     else if (p.state === 'ready') toast('Actualización descargada. Ábrela desde Ajustes o tu carpeta de Descargas.', 'ok');
   });
   on('soundcloud', (p) => { state.soundcloud = p; renderAccount(); });
+  on('reopened', () => toast('FreeTheNoize ya estaba abierto.', 'ok'));
 
   // ── Server events ──────────────────────────────────────────────────────
 

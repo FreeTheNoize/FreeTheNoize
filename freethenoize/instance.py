@@ -8,6 +8,10 @@ second launch asks the running one to show its window and exits.
 - Signal: the first instance listens on a random 127.0.0.1 port and writes
   {port, token} to instance.json in the data dir; the second one connects,
   sends the token and gets out of the way.
+- The listener starts right after the lock, before the window exists, so a
+  launch during start-up is answered too (the window shows when ready). While
+  the app is closing it answers "closing" and the new launch waits for the lock
+  to be free and then starts normally. There is never an error dialog.
 """
 import hashlib
 import json
@@ -16,6 +20,7 @@ import secrets
 import socket
 import sys
 import threading
+import time
 
 from .paths import DATA_DIR
 
@@ -59,7 +64,8 @@ def acquire() -> bool:
 
 
 def serve(on_show) -> None:
-    """Listen for "show yourself" requests from later launches."""
+    """Listen for "show yourself" requests from later launches. `on_show()`
+    returns "ok" or "closing"."""
     token = secrets.token_urlsafe(24)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -77,16 +83,16 @@ def serve(on_show) -> None:
                 conn.settimeout(2)
                 try:
                     if conn.recv(256).decode().strip() == token:
-                        on_show()
-                        conn.sendall(b"ok")
+                        conn.sendall((on_show() or "ok").encode())
                 except Exception:
                     pass
 
     threading.Thread(target=loop, daemon=True, name="instance").start()
 
 
-def show_running() -> bool:
-    """Ask the running instance to show its window. True if it answered."""
+def show_running() -> str | None:
+    """Ask the running instance to show its window: "ok", "closing" or None
+    (no answer)."""
     try:
         info = json.loads(INFO_FILE.read_text())
         if sys.platform == "win32":
@@ -97,6 +103,22 @@ def show_running() -> bool:
             ctypes.windll.user32.AllowSetForegroundWindow(int(info["pid"]))
         with socket.create_connection(("127.0.0.1", int(info["port"])), timeout=3) as s:
             s.sendall(info["token"].encode())
-            return s.recv(8) == b"ok"
+            answer = s.recv(16).decode()
+            return answer if answer in ("ok", "closing") else None
     except Exception:
-        return False
+        return None
+
+
+def hand_over(timeout: float = 30) -> bool:
+    """Another instance holds the lock. Returns True if this launch should go
+    on and start the app (the other one finished closing), False to just exit
+    (the other one was told to show its window, or never answered)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if acquire():
+            return True            # it finished closing: start normally
+        answer = show_running()
+        if answer == "ok":
+            return False           # its window is coming to the front
+        time.sleep(0.3)            # closing, or still starting up: wait
+    return False                   # stuck: never a dialog, just leave it be

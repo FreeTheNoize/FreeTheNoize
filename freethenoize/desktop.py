@@ -136,12 +136,40 @@ def run():
 
 
     # Already open: bring that window to the front instead of a second app.
-    if not instance.acquire():
-        if instance.show_running():
-            return 0
-        runtime.alert("FreeTheNoize", "FreeTheNoize ya está abierto, pero no responde.\n\n"
-                      "Ciérralo desde el Administrador de tareas y vuelve a abrirlo.")
-        return 1
+    # If it is closing, wait for it and start; never an error dialog.
+    if not instance.acquire() and not instance.hand_over():
+        log.info("ya había una instancia abierta: se le pide que se muestre")
+        return 0
+
+    # Answer later launches from now on, also while starting and closing.
+    ui = {"window": None, "kernel": None, "pending": False, "closing": False}
+
+    def on_show():
+        if ui["closing"]:
+            return "closing"
+        if ui["window"] is None:
+            ui["pending"] = True   # shown as soon as it exists
+            return "ok"
+        _bring_to_front()
+        return "ok"
+
+    def _bring_to_front():
+        if ui["kernel"]:
+            ui["kernel"].emit("reopened", {})   # page shows "ya estaba abierto"
+        if in_browser.is_set():
+            import webbrowser
+
+            webbrowser.open(url)
+            return
+        w = ui["window"]
+        w.restore()
+        w.show()
+        w.on_top = True  # raise above other windows, then behave normally
+        w.on_top = False
+
+    in_browser = threading.Event()
+    url = ""
+    instance.serve(on_show)
 
     runtime.unblock_bundled_dlls()  # before pywebview loads .NET (Windows)
     step("instancia única + DLL desbloqueadas")
@@ -155,6 +183,7 @@ def run():
     step("imports")
     kernel = Kernel()
     kernel.start()
+    ui["kernel"] = kernel
     auth = Auth(password=None, desktop=True)
     app = create_app(kernel, auth)
 
@@ -186,20 +215,14 @@ def run():
     from . import popups
 
     url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
-    in_browser = threading.Event()
+    window.events.closing += lambda *_: ui.update(closing=True)
 
-    def on_show():
-        if in_browser.is_set():
-            import webbrowser
+    def ready(*_):
+        ui["window"] = window
+        if ui.pop("pending", False):
+            _bring_to_front()
 
-            webbrowser.open(url)
-            return
-        window.restore()
-        window.show()
-        window.on_top = True  # raise above other windows, then behave normally
-        window.on_top = False
-
-    instance.serve(on_show)
+    window.events.shown += ready
     popups.install()
     step("ventana creada, arrancando el motor web")
     try:
@@ -218,6 +241,7 @@ def run():
         import webbrowser
 
         in_browser.set()
+        ui["window"] = window
         print(f"No se pudo abrir la ventana ({exc}). Abriendo en el navegador: {url}")
         print("Ctrl+C para salir.")
         webbrowser.open(url)
@@ -226,5 +250,13 @@ def run():
                 time.sleep(1)
         except KeyboardInterrupt:
             pass
+    # Closing: the window is already gone. Stop what we own and leave at once;
+    # waiting for the interpreter and the web engine to tear down took seconds
+    # (and kept the lock, so a quick relaunch looked like a hung app).
+    ui["closing"] = True
+    t_close = time.monotonic()
     server.should_exit = True
     kernel.stop()
+    log.info("cierre en %.2fs", time.monotonic() - t_close)
+    logging.shutdown()
+    os._exit(0)
