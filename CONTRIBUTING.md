@@ -44,16 +44,54 @@ feature/…, fix/…  ──PR──▶  develop  ──PR (release)──▶  m
 6. El **título de la PR** sigue [Conventional Commits](https://www.conventionalcommits.org/es/), porque es el mensaje
    del commit final y de él sale el CHANGELOG y la versión:
 
-   | Prefijo | Cuándo | Versión |
+   | Prefijo | Cuándo | Versión (mientras sea 0.x) |
    |---|---|---|
-   | `feat: …` | funcionalidad nueva | minor (3.**2**.0) |
-   | `fix: …` | arreglo | patch (3.1.**1**) |
+   | `feat: …` | funcionalidad nueva | patch (0.4.**2**) |
+   | `fix: …` | arreglo | patch (0.4.**2**) |
    | `perf:`, `refactor:`, `docs:`, `test:`, `build:`, `ci:`, `chore:` | resto | no publica por sí solo |
-   | `feat!: …` o `BREAKING CHANGE:` en el cuerpo | rompe compatibilidad | major (**4**.0.0) |
+   | `feat!: …` o `BREAKING CHANGE:` en el cuerpo | rompe compatibilidad | minor (0.**5**.0); evítalo: mejor migrar solo |
+
+   En 0.x la versión menor no la marca un commit cualquiera: el salto a **0.5.0** se hace a propósito, con
+   `Release-As: 0.5.0` en el cuerpo del commit, cuando entren los nuevos proveedores (ver el Roadmap).
 
    Ejemplos: `fix: el token de SoundCloud caducado no reintenta`, `feat(library): filtro por género`.
 
 7. Espera la revisión. Se fusiona con **squash** cuando hay **1 aprobación** de un maintainer o contributor y los checks están en verde.
+
+## Crear un complemento
+
+Cada función de la app (descargas, biblioteca, espectro, conversor…) es un **complemento** sobre un kernel
+pequeño. Una función nueva casi nunca toca el kernel: es una carpeta nueva. Lee antes
+[ARCHITECTURE.md](ARCHITECTURE.md); aquí va el camino corto.
+
+1. **Genera el esqueleto**:
+   ```sh
+   .venv/bin/python tools/new_plugin.py waveform --title "Forma de onda"
+   ```
+   Crea `freethenoize/plugins/waveform/` (`__init__.py`, `service.py`, `api.py`, `ui/waveform.js`) y lo añade
+   a `plugins.BUILTIN`. Arranca `freethenoize serve` (o la app) y la vista nueva ya sale en el menú.
+2. **La lógica en `service.py`**. Todo lo que necesites del kernel sale de `ctx`: ajustes (`ctx.settings`),
+   eventos (`ctx.emit`), carpetas propias (`ctx.data_dir`), rutas validadas, audio reproducible, yt-dlp.
+   Puedes usar las bibliotecas compartidas (`freethenoize.audio`, `files`, `ytdlp`, `ffmpeg`).
+3. **La API en `api.py`**: `routes(service, ctx)` devuelve un `APIRouter` que se monta en `/api/<id>`.
+   Toda ruta de archivo que venga de la página se declara `LibraryPath`.
+4. **La UI en `ui/<id>.js`** con `FTN.registerView` / `FTN.registerSettings`. Sin build ni librerías externas;
+   `innerHTML` solo para plantillas estáticas, el resto con `FTN.h()`.
+5. **Tests** en `tests/test_<id>.py`. `tests/test_plugins.py` ya comprueba el contrato (que se puede
+   desactivar, que sus rutas y eventos llevan su prefijo…).
+6. **Comprueba la arquitectura**: `python tools/check_architecture.py`. Dice archivo, línea y qué hacer; el CI
+   lo exige (check *architecture*). Si programas con un agente (Claude Code, Cursor, Copilot…), lee
+   [AGENTS.md](AGENTS.md): en Claude Code el comprobador corre solo tras cada edición.
+
+Reglas que no se negocian:
+
+- **Un complemento no importa a otro.** Si necesitas uno, ponlo en `requires=("downloads",)` y usa
+  `ctx.require("downloads")`; en la página, ofrece o usa acciones con `FTN.provide` / `FTN.use` y funciona
+  aunque no estén.
+- **Todo lo tuyo lleva tu id**: rutas `/api/<id>/…`, eventos `<id>.<evento>`, ajustes `<id>.<clave>`,
+  ficheros en `DATA_DIR/<id>/`, ids y clases CSS con prefijo `<id>-`.
+- **El kernel no se toca para una función.** Si de verdad falta algo en `Ctx` o en `FTN` que sirva a varios
+  complementos, propónlo en un issue aparte: los cambios al kernel se revisan con más calma.
 
 ## Qué se revisa
 
@@ -64,6 +102,7 @@ feature/…, fix/…  ──PR──▶  develop  ──PR (release)──▶  m
 - **Privacidad**: ni telemetría, ni analítica, ni llamadas a terceros nuevas sin hablarlo antes.
 - Dependencias nuevas: justificadas, mantenidas y con licencia compatible con **GPL-2.0-or-later**.
 - La UI sigue siendo HTML/CSS/JS **sin build**.
+- La [arquitectura](ARCHITECTURE.md): las funciones van en complementos y no se importan entre sí.
 
 Los cambios en CI (`.github/`), empaquetado, `Dockerfile`, dependencias o el actualizador se revisan con lupa:
 son lo que acaba ejecutándose en el ordenador de quien usa la app.

@@ -10,6 +10,12 @@ Closes #
 - [ ] Probado en escritorio (sistema: …)
 - [ ] Probado en modo servicio / Docker
 
+## Arquitectura (ver AGENTS.md y ARCHITECTURE.md)
+
+- [ ] La función nueva es un complemento (generado con `python tools/new_plugin.py`), no código en el kernel
+- [ ] La página usa solo la API `FTN` (`registerView`, `GET/POST`, `h()`…), sin `fetch` directo ni HTML con datos
+- [ ] `python tools/check_architecture.py` pasa sin errores (y sin `ftn-arch: allow` nuevos, o explicados aquí)
+
 ## Checklist
 
 - [ ] Un solo propósito por PR

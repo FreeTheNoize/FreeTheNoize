@@ -1,5 +1,9 @@
 """HTTP API + the UI, for the desktop window and for browsers alike.
 
+The kernel's routes live here; each plugin's router is mounted at
+/api/<plugin> behind the same auth, CSRF check and error handling, and its
+ui/ folder is served at /plugins/<plugin>/.
+
 Auth
 - desktop: the window gets a one-time key in its first URL, exchanged for a
   session cookie; other local processes and web pages cannot use the API.
@@ -12,22 +16,26 @@ import logging
 import os
 import secrets
 import time
+from html import escape
 from pathlib import Path
 
 from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-from . import runtime
-from .core import Core
-from .paths import SECRET_FILE, UI_DIR
+from . import __version__, paths, plugins, runtime
+from .kernel import Kernel
+from .plugin import LibraryPath
 
 log = logging.getLogger("freethenoize")
 
 COOKIE = "ftn_session"
 SESSION_TTL = 30 * 24 * 3600
 OPEN_PATHS = {"/api/health", "/api/session", "/api/login", "/auth/desktop"}
+# First path segment under /api/ that belongs to the kernel; no plugin may use one.
+KERNEL_PREFIXES = {"health", "session", "login", "logout", "state", "settings", "events", "upload",
+                   "stream", "playable", "files", "audio", "soundcloud", "update", "ytdlp"}
 
 
 class Auth:
@@ -40,15 +48,15 @@ class Auth:
     @staticmethod
     def _secret() -> bytes:
         try:
-            data = SECRET_FILE.read_bytes()
+            data = paths.SECRET_FILE.read_bytes()
             if len(data) >= 32:
                 return data
         except OSError:
             pass
         data = secrets.token_bytes(32)
-        SECRET_FILE.write_bytes(data)
+        paths.SECRET_FILE.write_bytes(data)
         try:
-            os.chmod(SECRET_FILE, 0o600)
+            os.chmod(paths.SECRET_FILE, 0o600)
         except OSError:
             pass
         return data
@@ -77,34 +85,7 @@ class Auth:
         return hmac.compare_digest(sig, self._sign(issued))
 
 
-# ── Request bodies ──────────────────────────────────────────────────────────
-
-class Text(BaseModel):
-    text: str
-
-
-class PathBody(BaseModel):
-    path: str
-
-
-class Pair(BaseModel):
-    a: str
-    b: str
-
-
-class ConvertBody(BaseModel):
-    files: list[str]
-    format: str
-    out_dir: str | None = None
-    normalize_lufs: float | None = None
-
-
-class SubBody(BaseModel):
-    url: str
-    interval_hours: float = 6
-
-
-def create_app(core: Core, auth: Auth) -> FastAPI:
+def create_app(kernel: Kernel, auth: Auth) -> FastAPI:
     app = FastAPI(title="FreeTheNoize", docs_url=None, redoc_url=None, openapi_url=None)
 
     # ── Errors ────────────────────────────────────────────────────────────
@@ -119,6 +100,13 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
     app.add_exception_handler(FileNotFoundError, _err(404))
     app.add_exception_handler(KeyError, _err(404))
     app.add_exception_handler(RuntimeError, _err(500))
+
+    @app.exception_handler(RequestValidationError)
+    async def bad_request(_req, exc: RequestValidationError):
+        first = (exc.errors() or [{}])[0]
+        where = ".".join(str(x) for x in first.get("loc", ())[1:])
+        msg = str(first.get("msg", "Petición no válida.")).removeprefix("Value error, ")
+        return JSONResponse({"error": f"{where}: {msg}" if where else msg}, status_code=400)
 
     # ── Auth & CSRF ───────────────────────────────────────────────────────
 
@@ -175,19 +163,19 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
         resp.delete_cookie(COOKIE, path="/")
         return resp
 
-    # ── State & events ────────────────────────────────────────────────────
+    # ── State, settings & events ──────────────────────────────────────────
 
     @app.get("/api/state")
     def state():
-        return core.state()
+        return kernel.state()
 
     @app.patch("/api/settings")
     def settings(patch: dict = Body(...)):
-        return core.update_settings(patch)
+        return kernel.update_settings(patch)
 
     @app.get("/api/events")
     async def events(request: Request):
-        q = core.bus.subscribe()
+        q = kernel.bus.subscribe()
 
         async def stream():
             try:
@@ -201,175 +189,99 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
                             break
                         yield ": ping\n\n"
             finally:
-                core.bus.unsubscribe(q)
+                kernel.bus.unsubscribe(q)
 
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    # ── Downloads ─────────────────────────────────────────────────────────
-
-    @app.post("/api/downloads")
-    def add_downloads(body: Text):
-        return core.add_downloads(body.text)
-
-    @app.post("/api/downloads/{job_id}/cancel")
-    def cancel(job_id: int):
-        core.downloads.cancel(job_id)
-        return {"ok": True}
-
-    @app.post("/api/downloads/{job_id}/retry")
-    def retry(job_id: int):
-        core.downloads.retry(job_id)
-        return {"ok": True}
-
-    @app.post("/api/downloads/cancel-all")
-    def cancel_all():
-        core.downloads.cancel_all()
-        return {"ok": True}
-
-    @app.post("/api/downloads/clear")
-    def clear():
-        core.downloads.clear_finished()
-        return {"ok": True}
-
-    @app.get("/api/history")
-    def history():
-        return core.history()
-
-    @app.get("/api/search")
-    def search(q: str = ""):
-        return core.search(q)
-
-    @app.get("/api/update")
-    def update_status():
-        return core.updates.status()
-
-    @app.post("/api/update/check")
-    def update_check():
-        return core.updates.check()
-
-    @app.post("/api/update/download")
-    def update_download():
-        return core.updates.start_download()
-
-    @app.post("/api/update/skip")
-    def update_skip():
-        return core.updates.skip()
-
-    @app.post("/api/preview")
-    def preview(body: Text):
-        return core.preview(body.text)
-
-    @app.get("/api/preview/{name}")
-    def preview_audio(name: str, t: float = 0):
-        try:
-            chunks = core.previews.stream(Path(name).stem, max(t, 0))
-        except KeyError:
-            raise HTTPException(404)
-        return StreamingResponse(chunks, media_type="audio/mpeg",
-                                 headers={"Cache-Control": "no-store"})
-
-    # ── Subscriptions ─────────────────────────────────────────────────────
-
-    @app.get("/api/subscriptions")
-    def subs():
-        return core.subscriptions.list()
-
-    @app.post("/api/subscriptions")
-    def sub_add(body: SubBody):
-        return core.subscriptions.add(body.url, body.interval_hours)
-
-    @app.patch("/api/subscriptions/{sub_id}")
-    def sub_update(sub_id: str, patch: dict = Body(...)):
-        return core.subscriptions.update(sub_id, patch)
-
-    @app.delete("/api/subscriptions/{sub_id}")
-    def sub_delete(sub_id: str):
-        core.subscriptions.remove(sub_id)
-        return {"ok": True}
-
-    @app.post("/api/subscriptions/{sub_id}/check")
-    def sub_check(sub_id: str):
-        core.subscriptions.check(sub_id)
-        return {"ok": True}
-
-    # ── SoundCloud ────────────────────────────────────────────────────────
-
-    @app.post("/api/soundcloud/token")
-    def sc_token(body: dict = Body(...)):
-        return core.soundcloud_set_token(str(body.get("token", "")))
-
-    @app.delete("/api/soundcloud/token")
-    def sc_logout():
-        return core.soundcloud_logout()
-
-    # ── Files ─────────────────────────────────────────────────────────────
+    # ── Files & audio (shared by every plugin) ────────────────────────────
 
     @app.post("/api/upload")
     def upload(file: UploadFile = File(...)):
-        return core.save_upload(file.filename, file.file)
+        return kernel.save_upload(file.filename, file.file)
 
-    @app.get("/api/library")
-    def library():
-        return core.library_list()
-
-    @app.delete("/api/library")
-    def library_delete(path: str):
-        core.delete_file(path)
-        return {"ok": True}
-
+    # LibraryPath already validated these; check again right at the file
+    # sink so the sandbox does not depend on the validator being wired up.
     @app.get("/api/stream")
-    def stream_file(path: str):
-        return FileResponse(core.check_path(path))
+    def stream_file(path: LibraryPath):
+        return FileResponse(kernel.check_path(path))
 
     @app.get("/api/playable")
-    def playable(path: str):
-        return {"url": core.playable_url(core.check_path(path))}
+    def playable(path: LibraryPath):
+        return {"url": kernel.playable_url(path)}
 
     @app.get("/api/files/download")
-    def download_file(path: str):
-        p = core.check_path(path)
-        if not p.is_file():
+    def download_file(path: LibraryPath):
+        safe = kernel.check_path(path)
+        if not safe.is_file():
             raise HTTPException(404)
-        return FileResponse(p, filename=p.name)
-
-    @app.get("/api/cover")
-    def cover(path: str):
-        img = core.library.cover(core.check_path(path))
-        if not img:
-            return Response(status_code=204)
-        return FileResponse(img, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+        return FileResponse(safe, filename=safe.name)
 
     @app.get("/api/audio/{name}")
     def audio(name: str):
-        f = core.cached_audio(Path(name).stem)
+        f = kernel.cached_audio(Path(name).stem)
         if not f or not f.exists():
             raise HTTPException(404)
         return FileResponse(f, media_type="audio/wav")
 
-    # ── Analysis & conversion ─────────────────────────────────────────────
+    # ── SoundCloud session ────────────────────────────────────────────────
 
-    @app.post("/api/analyze")
-    def analyze(body: PathBody):
-        return core.analyze(body.path)
+    @app.post("/api/soundcloud/token")
+    def sc_token(body: dict = Body(...)):
+        return kernel.soundcloud_set_token(str(body.get("token", "")))
 
-    @app.post("/api/null-test")
-    def null_test(body: Pair):
-        return core.null_test(body.a, body.b)
+    @app.delete("/api/soundcloud/token")
+    def sc_logout():
+        return kernel.soundcloud_logout()
 
-    @app.post("/api/convert")
-    def convert(body: ConvertBody):
-        return core.convert(body.files, body.format, body.out_dir, body.normalize_lufs)
+    # ── Updates ───────────────────────────────────────────────────────────
+
+    @app.get("/api/update")
+    def update_status():
+        return kernel.updates.status()
+
+    @app.post("/api/update/check")
+    def update_check():
+        return kernel.updates.check()
+
+    @app.post("/api/update/download")
+    def update_download():
+        return kernel.updates.start_download()
+
+    @app.post("/api/update/skip")
+    def update_skip():
+        return kernel.updates.skip()
 
     @app.post("/api/ytdlp/update")
     def ytdlp_update():
-        return core.update_ytdlp()
+        return kernel.update_ytdlp()
+
+    # ── Plugins ───────────────────────────────────────────────────────────
+
+    ui_tags = []
+    for lp in kernel.active():
+        p = lp.plugin
+        if p.id in KERNEL_PREFIXES:
+            raise ValueError(f"plugin id {p.id!r} clashes with a kernel route")
+        if p.api:
+            app.include_router(p.api(lp.service, lp.ctx), prefix=f"/api/{p.id}")
+        ui_dir = plugins.folder(p.id) / "ui"
+        if ui_dir.is_dir():
+            app.mount(f"/plugins/{p.id}", StaticFiles(directory=ui_dir), name=f"plugin-{p.id}")
+            v = escape(f"{__version__}-{p.version}")
+            if (ui_dir / f"{p.id}.css").is_file():
+                ui_tags.append(f'<link rel="stylesheet" href="/plugins/{p.id}/{p.id}.css?v={v}">')
+            if (ui_dir / f"{p.id}.js").is_file():
+                ui_tags.append(f'<script src="/plugins/{p.id}/{p.id}.js?v={v}"></script>')
 
     # ── UI ────────────────────────────────────────────────────────────────
 
+    page = (paths.UI_DIR / "index.html").read_text(encoding="utf-8")
+    page = page.replace("<!-- plugins -->", "\n".join(ui_tags)).replace("{{version}}", escape(__version__))
+
     @app.get("/")
     def index():
-        return FileResponse(UI_DIR / "index.html", headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
-    app.mount("/", StaticFiles(directory=UI_DIR), name="ui")
+    app.mount("/", StaticFiles(directory=paths.UI_DIR), name="ui")
     return app

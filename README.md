@@ -87,7 +87,7 @@ de los demás y deciden juntos quién entra
 ([GOVERNANCE.md](GOVERNANCE.md)). El objetivo: que cualquier DJ pueda conseguir la mejor calidad que existe de lo que
 pincha, saber la verdad sobre esa calidad y tenerlo listo para la cabina, sin anuncios, sin cuentas y sin rastreo.
 
-- 🗺️ Hacia dónde vamos: [Roadmap](https://github.com/orgs/FreeTheNoize/projects/1) (kernel y plugins en 0.4.0, CLI en 0.4.1, más fuentes en 0.5.0)
+- 🗺️ Hacia dónde vamos: [Roadmap](https://github.com/orgs/FreeTheNoize/projects/1) (kernel, complementos y CLI en 0.4.x, más fuentes en 0.5.0)
 - 💬 Ideas y dudas: [Discussions](https://github.com/FreeTheNoize/FreeTheNoize/discussions)
 - 🐛 Bugs y propuestas: [Issues](https://github.com/FreeTheNoize/FreeTheNoize/issues/new/choose)
 - 🔒 Fallos de seguridad: en privado, ver [SECURITY.md](SECURITY.md)
@@ -116,22 +116,34 @@ y al aprobarla se publican los zips de escritorio y la imagen Docker. Detalles e
 git clone https://github.com/FreeTheNoize/FreeTheNoize && cd FreeTheNoize   # rama por defecto: develop
 uv venv && uv pip install -e ".[desktop,dev]"
 .venv/bin/python -m pytest
+python tools/check_architecture.py                               # reglas del framework (también en CI)
 .venv/bin/pyinstaller packaging/freethenoize.spec --noconfirm   # build de escritorio
 ```
+
+FreeTheNoize es un **kernel pequeño con complementos**: cada función es una carpeta en `freethenoize/plugins/`
+con su lógica, su API y su pantalla. Para añadir una: `.venv/bin/python tools/new_plugin.py <id>`.
+Cómo encaja todo en [ARCHITECTURE.md](ARCHITECTURE.md) (y, para agentes, [AGENTS.md](AGENTS.md)); paso a paso en
+[CONTRIBUTING.md › Crear un complemento](CONTRIBUTING.md#crear-un-complemento).
 
 ```
 freethenoize/
   app.py            CLI: app | serve | get
   desktop.py        ventana pywebview + diálogos nativos
-  web.py            API HTTP (FastAPI), eventos SSE, auth
-  core.py           lógica común a escritorio y servicio
-  downloads/        cola, resolución de enlaces, nombres, etiquetas (mutagen)
-  analysis/         decodificación, espectrograma, corte, loudness, BPM/tonalidad, null test
-  subscriptions.py  sincronización periódica
-  library.py        índice de la carpeta de música y carátulas
-  converter.py      conversión por lotes y normalización
-  ytdlp_loader.py   actualización de yt-dlp en caliente
-  ui/               HTML/CSS/JS sin build
+  web.py            API HTTP del kernel (FastAPI), eventos SSE, auth; monta los complementos
+  kernel.py         carga complementos; ajustes, eventos, rutas, audio, SoundCloud, actualizaciones
+  plugin.py         el contrato: Plugin, Ctx, LibraryPath
+  audio/            biblioteca compartida: decodificar, espectro, loudness, BPM/tonalidad, null test, etiquetas
+  ytdlp.py          yt-dlp actualizable en caliente y parámetros comunes
+  plugins/
+    downloads/      cola, resolución de enlaces, nombres e historial
+    preview/        pre-escucha
+    search/         búsqueda en SoundCloud
+    subscriptions/  sincronización periódica (usa downloads)
+    library/        carpeta de música y carátulas
+    analysis/       espectro y A/B · null
+    convert/        conversión por lotes y normalización
+  ui/               carcasa de la página + kernel.js (window.FTN), sin build
+tools/new_plugin.py genera un complemento nuevo
 ```
 
 ## Licencia y aviso

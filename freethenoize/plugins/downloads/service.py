@@ -7,13 +7,14 @@ import traceback
 from collections import deque
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from .. import settings as settings_mod
-from ..ffmpeg import FFMPEG
-from ..paths import ARCHIVE_FILE, HISTORY_FILE
-from . import naming, tagging
-from .resolve import TrackRef, resolve, source_of
+if TYPE_CHECKING:
+    from ...plugin import Ctx
+
+from ...audio import tagging
+from . import naming
+from .resolve import resolve, source_of
 
 LOSSLESS_EXTS = {"wav", "flac", "aif", "aiff", "alac"}
 
@@ -117,10 +118,11 @@ class _Logger:
 class Archive:
     """IDs of everything already downloaded, in yt-dlp's archive format."""
 
-    def __init__(self):
+    def __init__(self, path: Path):
+        self._path = path
         self._lock = threading.Lock()
         try:
-            self._ids = set(ARCHIVE_FILE.read_text(encoding="utf-8").split("\n"))
+            self._ids = set(path.read_text(encoding="utf-8").split("\n"))
         except OSError:
             self._ids = set()
 
@@ -131,56 +133,53 @@ class Archive:
         with self._lock:
             if key not in self._ids:
                 self._ids.add(key)
-                with ARCHIVE_FILE.open("a", encoding="utf-8") as f:
+                with self._path.open("a", encoding="utf-8") as f:
                     f.write(key + "\n")
 
 
-def append_history(record: dict):
-    with HISTORY_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+class History:
+    """One JSON line per finished download."""
 
+    def __init__(self, path: Path):
+        self._path = path
+        self._lock = threading.Lock()
 
-def read_history(limit: int = 500) -> list[dict]:
-    try:
-        lines = HISTORY_FILE.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    out = []
-    for line in reversed(lines[-limit:]):
+    def append(self, record: dict):
+        with self._lock, self._path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def read(self, limit: int = 500) -> list[dict]:
         try:
-            out.append(json.loads(line))
-        except ValueError:
-            continue
-    return out
+            lines = self._path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        out = []
+        for line in reversed(lines[-limit:]):
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                continue
+        return out
 
 
 class DownloadManager:
-    def __init__(self, settings: settings_mod.Settings, emit: Callable[[str, dict], None]):
-        self.settings = settings
-        self.emit = emit
-        self.archive = Archive()
+    """Public API for other plugins (declare requires=("downloads",)):
+    add(urls, origin, on_resolved), snapshot(), cancel_all()."""
+
+    def __init__(self, ctx: "Ctx"):
+        self.ctx = ctx
+        self.settings = ctx.settings
+        self.emit = ctx.emit
+        self.archive = Archive(ctx.data_file("archive.txt", legacy="archive.txt"))
+        self.history = History(ctx.data_file("history.jsonl", legacy="history.jsonl"))
         self.jobs: dict[int, Job] = {}
         self._pending: deque[Job] = deque()
         self._lock = threading.Lock()
         self._workers = 0
         self._last_emit: dict[int, float] = {}
 
-    # ── yt-dlp parameters ─────────────────────────────────────────────────────
-
-    def base_params(self, url: str) -> dict:
-        params = {
-            "quiet": True,
-            "no_warnings": False,
-            "noprogress": True,
-            "ffmpeg_location": FFMPEG,
-            "retries": 5,
-            "fragment_retries": 10,
-            "socket_timeout": 30,
-        }
-        if source_of(url) == "soundcloud" and (token := settings_mod.get_token()):
-            params["username"] = "oauth"
-            params["password"] = token
-        return params
+    def state(self) -> dict:
+        return {"jobs": self.snapshot()}
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -233,7 +232,7 @@ class DownloadManager:
                            on_resolved: Callable[[dict], None] | None = None):
         self.emit("resolving", {"url": url, "active": True, "origin": origin})
         try:
-            title, refs = resolve(url, {**self.base_params(url), "no_warnings": True})
+            title, refs = resolve(url, {**self.ctx.ytdlp_params(url), "no_warnings": True})
         except Exception as e:
             err = _short_error(e)
             self.emit("resolving", {"url": url, "active": False, "error": err, "origin": origin})
@@ -310,7 +309,7 @@ class DownloadManager:
         job.status = "downloading"
         self._emit_job(job, force=True)
 
-        params = {**self.base_params(job.url), "format": FORMAT_SELECTOR,
+        params = {**self.ctx.ytdlp_params(job.url), "format": FORMAT_SELECTOR,
                   "format_sort": FORMAT_SORT, "logger": _Logger(job)}
         with YoutubeDL(params) as ydl:
             info = ydl.extract_info(job.url, download=False)
@@ -329,7 +328,7 @@ class DownloadManager:
                 job.progress = 1.0
                 return
 
-            dest_dir = Path(self.settings["download_dir"]).expanduser()
+            dest_dir = self.ctx.music_dir()
             if job.playlist:
                 dest_dir /= naming.safe_filename(job.playlist)
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -380,7 +379,7 @@ class DownloadManager:
         self._emit_job(job, force=True)
         if self.settings["detect_bpm_key"]:
             try:
-                from ..analysis import bpm_key
+                from ...audio import bpm_key
 
                 mk = bpm_key(path)
                 job.bpm, job.key, job.camelot = mk["bpm"], mk["key"], mk["camelot"]
@@ -392,7 +391,7 @@ class DownloadManager:
         job.path = str(path)
         job.status = "done"
         self.archive.add(archive_id)
-        append_history({
+        self.history.append({
             "time": time.time(), "url": job.url, "path": job.path,
             "title": job.title, "artist": job.artist, "quality": job.quality,
             "thumbnail": job.thumbnail, "bpm": job.bpm, "key": job.key, "camelot": job.camelot,

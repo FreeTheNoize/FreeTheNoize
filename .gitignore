@@ -16,7 +16,9 @@ dist/
 bin/
 
 # Editor / tool config
-.claude/
+# Claude Code: shared hooks are versioned, personal settings (settings.local.json) are not
+.claude/*
+!.claude/settings.json
 .idea/
 .vscode/
 

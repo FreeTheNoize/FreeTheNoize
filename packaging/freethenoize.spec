@@ -15,6 +15,8 @@ hidden = (
     collect_submodules("uvicorn")
     + collect_submodules("yt_dlp")
     + collect_submodules("webview")
+    # Plugins are imported by name at runtime (freethenoize.plugins.load).
+    + collect_submodules("freethenoize.plugins")
     + ["keyring.backends.macOS", "keyring.backends.Windows", "keyring.backends.SecretService", "multipart"]
 )
 # Linux window = pywebview's Qt backend. Only the Qt modules it imports
@@ -33,6 +35,7 @@ if sys.platform.startswith("linux"):
     hidden += [f"qtpy.{m}" for m in QT_USED]
     excludes += [f"{pkg}.{m}" for pkg in ("qtpy", "PyQt6") for m in QT_UNUSED] + ["PyQt5", "PySide2", "PySide6"]
 datas = [(str(ROOT / "freethenoize" / "ui"), "freethenoize/ui")]
+datas += collect_data_files("freethenoize.plugins")  # each plugin's ui/ (js, css)
 ICON = ROOT / "packaging" / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
 datas += collect_data_files("imageio_ffmpeg")
 binaries = []

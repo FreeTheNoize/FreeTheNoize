@@ -1,6 +1,7 @@
 """Turn whatever the user pasted into a flat list of tracks."""
 from dataclasses import dataclass
-from urllib.parse import urlparse
+
+from ...ytdlp import source_of  # noqa: F401  (re-exported for the service)
 
 MAX_DEPTH = 3
 
@@ -20,15 +21,6 @@ def archive_key(extractor: str | None, video_id: str | None) -> str | None:
     if extractor and video_id:
         return f"{extractor.lower()} {video_id}"
     return None
-
-
-def source_of(url: str) -> str:
-    host = (urlparse(url).hostname or "").lower()
-    if host.endswith("soundcloud.com") or host == "snd.sc":
-        return "soundcloud"
-    if host.endswith("youtube.com") or host == "youtu.be":
-        return "youtube"
-    return "other"
 
 
 def _is_container(entry: dict) -> bool:
@@ -76,25 +68,3 @@ def resolve(url: str, ydl_params: dict) -> tuple[str | None, list[TrackRef]]:
         title = info.get("title")
         walk(info, title, 0)
         return title, tracks
-
-
-def search_soundcloud(query: str, limit: int, ydl_params: dict) -> list[dict]:
-    from yt_dlp import YoutubeDL
-
-    params = {**ydl_params, "extract_flat": "in_playlist", "skip_download": True}
-    with YoutubeDL(params) as ydl:
-        info = ydl.extract_info(f"scsearch{limit}:{query}", download=False)
-    results = []
-    for e in info.get("entries") or []:
-        thumbs = e.get("thumbnails") or []
-        results.append({
-            "url": e.get("url"),
-            "title": e.get("title"),
-            "uploader": e.get("uploader"),
-            "duration": e.get("duration"),
-            "thumbnail": next(
-                (t["url"] for t in thumbs if t.get("id") == "t300x300"),
-                thumbs[-1]["url"] if thumbs else None,
-            ),
-        })
-    return results

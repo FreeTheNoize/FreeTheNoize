@@ -1,10 +1,18 @@
-"""Everything the UI can ask for, independent of how it is shown.
+"""The kernel: what every plugin relies on, independent of how it is shown.
 
-Both front doors use this: the HTTP API (web.py) for browsers and the
-desktop window, and the native bridge (desktop.py) for dialogs.
+It loads the plugins, gives each one its `Ctx`, and owns what is shared:
+settings, events, the path sandbox of the web service, uploads, playable
+audio, the SoundCloud session, yt-dlp and app updates. It never imports a
+plugin by name (`plugins.BUILTIN` is the only list) and has no feature logic.
+
+Both front doors use it: the HTTP API (web.py) for browsers and the desktop
+window, and the native bridge (desktop.py) for dialogs.
 """
+from __future__ import annotations
+
 import hashlib
 import json
+import logging
 import re
 import secrets
 import shutil
@@ -14,73 +22,167 @@ import time
 import urllib.request
 import wave
 from pathlib import Path
+from typing import Any, Iterable
 from urllib.parse import quote
 
-import numpy as np
-
-from . import __version__, analysis, converter, ffmpeg, runtime, ytdlp_loader
+from . import __version__, ffmpeg, paths, plugin as plugin_mod, plugins, runtime, ytdlp
 from . import settings as settings_mod
-from .downloads import manager as dl
-from .downloads.naming import safe_filename
-from .downloads.resolve import search_soundcloud
 from .events import EventBus
-from .library import AUDIO_EXTS, Library
-from .paths import AUDIO_CACHE_DIR, UPLOAD_DIR
-from .preview import Previews
-from .subscriptions import Subscriptions
+from .files import AUDIO_EXTS, safe_filename
+from .plugin import Ctx, Plugin
 from .updates import Updater
 
-_URL = re.compile(r"https?://\S+")
+log = logging.getLogger("freethenoize")
+
 # Played straight from disk; anything else is transcoded to WAV first so it
 # works on WebKit, WebView2 and every browser, also inside Web Audio.
 DIRECT_PLAY = {".mp3", ".m4a", ".aac", ".wav"}
 UPLOAD_TTL = 24 * 3600
 
 
-class Core:
-    def __init__(self):
+class LoadedPlugin:
+    def __init__(self, pid: str, plugin: Plugin | None):
+        self.id = pid
+        self.plugin = plugin
+        self.ctx: Ctx | None = None
+        self.service: Any = None
+        self.status = "active"       # active | disabled | unavailable
+        self.reason = ""
+
+    def info(self) -> dict:
+        p = self.plugin
+        return {"id": self.id, "title": p.title if p else self.id, "version": p.version if p else "",
+                "description": p.description if p else "", "requires": list(p.requires) if p else [],
+                "status": self.status, "reason": self.reason}
+
+
+class Kernel:
+    def __init__(self, plugin_ids: Iterable[str] | None = None):
+        plugin_mod._active = self
         self.bus = EventBus()
         self.emit = self.bus.emit
         self.settings = settings_mod.Settings()
-        self.downloads = dl.DownloadManager(self.settings, self.emit)
-        self.subscriptions = Subscriptions(self.downloads, self.emit)
-        self.library = Library()
-        self.previews = Previews(self.downloads.base_params)
         self.updates = Updater(self.settings, self.emit)
         self._audio: dict[str, Path] = {}
         self._audio_lock = threading.Lock()
         self._sc_username: str | None = None
-        AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        for old in AUDIO_CACHE_DIR.glob("*.wav"):
+        paths.AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        paths.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        for old in paths.AUDIO_CACHE_DIR.glob("*.wav"):
             old.unlink(missing_ok=True)
         self._clean_uploads()
+        self.plugins: dict[str, LoadedPlugin] = {}
+        self._load_plugins(plugins.BUILTIN if plugin_ids is None else plugin_ids)
+
+    # ── Plugins ──────────────────────────────────────────────────────────────
+
+    def _load_plugins(self, ids: Iterable[str]) -> None:
+        disabled = set(self.settings["disabled_plugins"])
+        for pid in ids:
+            try:
+                lp = LoadedPlugin(pid, plugins.load(pid))
+            except Exception as e:
+                log.exception("plugin %s failed to load", pid)
+                lp = LoadedPlugin(pid, None)
+                lp.status, lp.reason = "unavailable", f"no carga: {e}"
+            else:
+                if runtime.mode() not in lp.plugin.modes:
+                    lp.status, lp.reason = "unavailable", "no disponible en este modo"
+                elif pid in disabled:
+                    lp.status, lp.reason = "disabled", "desactivado en Ajustes"
+            self.plugins[pid] = lp
+
+        # A plugin whose requirements are off is off too (repeat: chains).
+        changed = True
+        while changed:
+            changed = False
+            for lp in self.plugins.values():
+                if lp.status != "active":
+                    continue
+                missing = [r for r in lp.plugin.requires
+                           if r not in self.plugins or self.plugins[r].status != "active"]
+                if missing:
+                    lp.status, lp.reason = "unavailable", "necesita " + ", ".join(missing)
+                    changed = True
+
+        for pid in self._dependency_order():
+            lp = self.plugins[pid]
+            p = lp.plugin
+            try:
+                self.settings.register(p.id, p.settings, server_locked=p.server_locked, limits=p.limits)
+                lp.ctx = Ctx(self, p)
+                lp.service = p.service(lp.ctx) if p.service else None
+            except Exception as e:
+                log.exception("plugin %s failed to start", pid)
+                lp.status, lp.reason, lp.service = "unavailable", f"error al arrancar: {e}", None
+
+    def _dependency_order(self) -> list[str]:
+        order: list[str] = []
+
+        def visit(pid: str):
+            if pid in order:
+                return
+            for req in self.plugins[pid].plugin.requires:
+                visit(req)
+            order.append(pid)
+
+        for pid, lp in self.plugins.items():
+            if lp.status == "active":
+                visit(pid)
+        return order
+
+    def active(self) -> list[LoadedPlugin]:
+        return [lp for lp in self.plugins.values() if lp.status == "active"]
+
+    def service(self, plugin_id: str) -> Any:
+        lp = self.plugins.get(plugin_id)
+        if not lp or lp.status != "active":
+            raise KeyError(f"plugin {plugin_id} is not active")
+        return lp.service
+
+    # ── Lifecycle ────────────────────────────────────────────────────────────
 
     def start(self):
-        self.subscriptions.start()
+        for lp in self.active():
+            if hasattr(lp.service, "start"):
+                try:
+                    lp.service.start()
+                except Exception:
+                    log.exception("plugin %s: start() failed", lp.plugin.id)
         self.updates.start()
         threading.Thread(target=self._refresh_username, daemon=True).start()
 
     def stop(self):
-        self.subscriptions.stop()
         self.updates.stop()
+        for lp in reversed(self.active()):
+            if hasattr(lp.service, "stop"):
+                try:
+                    lp.service.stop()
+                except Exception:
+                    log.exception("plugin %s: stop() failed", lp.plugin.id)
 
     # ── State ────────────────────────────────────────────────────────────────
 
     def state(self) -> dict:
+        plugin_state = {}
+        for lp in self.active():
+            try:
+                plugin_state[lp.plugin.id] = lp.service.state() if hasattr(lp.service, "state") else {}
+            except Exception:
+                log.exception("plugin %s: state() failed", lp.plugin.id)
+                plugin_state[lp.plugin.id] = {}
         return {
             "version": __version__,
             "mode": runtime.mode(),
-            "ytdlp_version": ytdlp_loader.current_version(),
+            "ytdlp_version": ytdlp.current_version(),
             "ffmpeg": ffmpeg.FFMPEG if not runtime.is_server() else bool(ffmpeg.FFMPEG),
             "platform": sys.platform,
             "settings": self.settings.as_dict(),
-            "locked_settings": sorted(settings_mod.SERVER_LOCKED) if runtime.is_server() else [],
+            "locked_settings": self.settings.locked(),
             "soundcloud": self.soundcloud_status(),
             "update": self.updates.status(),
-            "jobs": self.downloads.snapshot(),
-            "subscriptions": self.subscriptions.list(),
-            "formats": {k: v["label"] for k, v in converter.FORMATS.items()},
+            "plugins": plugin_state,
+            "plugin_list": [lp.info() for lp in self.plugins.values()],
         }
 
     def update_settings(self, patch: dict) -> dict:
@@ -91,9 +193,9 @@ class Core:
     # ── Paths ────────────────────────────────────────────────────────────────
 
     def roots(self) -> list[Path]:
-        return [Path(self.settings["download_dir"]).expanduser().resolve(), UPLOAD_DIR.resolve()]
+        return [Path(self.settings["download_dir"]).expanduser().resolve(), paths.UPLOAD_DIR.resolve()]
 
-    def check_path(self, raw: str, must_exist: bool = True) -> Path:
+    def check_path(self, raw: str | Path, must_exist: bool = True) -> Path:
         """Validate a path coming from the page. On a server it must live in
         the music folder or the upload area."""
         if not raw:
@@ -109,7 +211,7 @@ class Core:
         name = safe_filename(Path(filename or "audio").name)
         if Path(name).suffix.lower() not in AUDIO_EXTS:
             raise ValueError("Formato de audio no admitido.")
-        folder = UPLOAD_DIR / secrets.token_hex(6)
+        folder = paths.UPLOAD_DIR / secrets.token_hex(6)
         folder.mkdir(parents=True)
         target = folder / name
         with target.open("wb") as f:
@@ -118,7 +220,7 @@ class Core:
 
     def _clean_uploads(self):
         cutoff = time.time() - UPLOAD_TTL
-        for d in UPLOAD_DIR.iterdir():
+        for d in paths.UPLOAD_DIR.iterdir():
             try:
                 if d.is_dir() and d.stat().st_mtime < cutoff:
                     shutil.rmtree(d, ignore_errors=True)
@@ -132,7 +234,7 @@ class Core:
             return f"/api/stream?path={quote(str(path))}"
         st = path.stat()
         key = hashlib.sha1(f"{path}|{st.st_mtime_ns}|{st.st_size}".encode()).hexdigest()[:20]
-        target = AUDIO_CACHE_DIR / f"{key}.wav"
+        target = paths.AUDIO_CACHE_DIR / f"{key}.wav"
         if not target.exists():
             tmp = target.with_suffix(".part.wav")
             res = ffmpeg.run(["-v", "error", "-y", "-i", str(path), "-map", "0:a:0",
@@ -145,12 +247,14 @@ class Core:
             self._audio[key] = target
         return f"/api/audio/{key}.wav"
 
-    def samples_url(self, samples: np.ndarray, sr: int) -> str:
+    def samples_url(self, samples, sr: int) -> str:
         """Write float samples (frames, channels) as a WAV normalised to -1 dBFS."""
+        import numpy as np
+
         peak = float(np.abs(samples).max()) or 1.0
         pcm = (samples / peak * 0.89 * 32767).astype("<i2")
         key = secrets.token_hex(10)
-        target = AUDIO_CACHE_DIR / f"{key}.wav"
+        target = paths.AUDIO_CACHE_DIR / f"{key}.wav"
         with wave.open(str(target), "wb") as w:
             w.setnchannels(samples.shape[1])
             w.setsampwidth(2)
@@ -164,40 +268,7 @@ class Core:
         with self._audio_lock:
             return self._audio.get(key)
 
-    # ── Downloads ────────────────────────────────────────────────────────────
-
-    def add_downloads(self, text: str) -> dict:
-        urls = list(dict.fromkeys(u.rstrip(").,;]") for u in _URL.findall(text or "")))
-        if urls:
-            self.downloads.add(urls)
-        return {"accepted": len(urls)}
-
-    def search(self, query: str) -> list[dict]:
-        query = (query or "").strip()
-        if not query:
-            return []
-        return search_soundcloud(query, 24, {"quiet": True, "no_warnings": True})
-
-    def preview(self, url: str) -> dict:
-        return self.previews.resolve(url)
-
-    def history(self) -> list[dict]:
-        return dl.read_history()
-
-    # ── Library ──────────────────────────────────────────────────────────────
-
-    def library_list(self) -> dict:
-        root = Path(self.settings["download_dir"]).expanduser()
-        return {"root": str(root) if not runtime.is_server() else "", "items": self.library.scan(root)}
-
-    def delete_file(self, raw: str) -> None:
-        path = self.check_path(raw)
-        if not path.is_file() or path.suffix.lower() not in AUDIO_EXTS:
-            raise ValueError("Solo se pueden borrar archivos de audio.")
-        path.unlink()
-        self.emit("library_changed", {"removed": str(path)})
-
-    # ── SoundCloud account ───────────────────────────────────────────────────
+    # ── SoundCloud session (shared by downloads, preview and search) ─────────
 
     def soundcloud_status(self) -> dict:
         token = settings_mod.get_token()
@@ -237,45 +308,7 @@ class Core:
         self.emit("soundcloud", status)
         return status
 
-    # ── Analysis ─────────────────────────────────────────────────────────────
-
-    def analyze(self, raw: str) -> dict:
-        path = self.check_path(raw)
-        result = analysis.analyze(path)
-        result["audio_url"] = self.playable_url(path)
-        return result
-
-    def null_test(self, raw_a: str, raw_b: str) -> dict:
-        a, b = self.check_path(raw_a), self.check_path(raw_b)
-        report, diff, sr = analysis.null_test(a, b)
-        report["audio_url"] = self.samples_url(diff, sr)
-        return report
-
-    # ── Converter ────────────────────────────────────────────────────────────
-
-    def convert(self, files: list[str], fmt: str, out_dir: str | None = None,
-                normalize_lufs: float | None = None) -> dict:
-        if fmt not in converter.FORMATS:
-            raise ValueError(fmt)
-        paths = [self.check_path(f) for f in files]
-        dest = str(self.check_path(out_dir)) if out_dir else None
-        batch = secrets.token_hex(4)
-
-        def work():
-            for i, src in enumerate(paths):
-                self.emit("convert", {"batch": batch, "index": i, "src": str(src), "status": "running"})
-                try:
-                    res = converter.convert_one(str(src), fmt, dest, normalize_lufs)
-                    self.emit("convert", {"batch": batch, "index": i, "status": "done", **res})
-                except Exception as e:
-                    self.emit("convert", {"batch": batch, "index": i, "src": str(src),
-                                          "status": "error", "error": str(e)})
-            self.emit("convert", {"batch": batch, "status": "finished"})
-
-        threading.Thread(target=work, daemon=True).start()
-        return {"started": len(paths), "batch": batch}
-
     # ── Maintenance ──────────────────────────────────────────────────────────
 
     def update_ytdlp(self) -> dict:
-        return ytdlp_loader.update()
+        return ytdlp.update()

@@ -21,8 +21,8 @@ AUDIO_TYPES = ("Audio (*.wav;*.flac;*.aif;*.aiff;*.mp3;*.m4a;*.aac;*.opus;*.ogg)
 class NativeBridge:
     """Exposed to JavaScript as window.pywebview.api."""
 
-    def __init__(self, core):
-        self._core = core
+    def __init__(self, kernel):
+        self._kernel = kernel
         self._window = None
 
     def choose_folder(self, start: str = "") -> str | None:
@@ -74,12 +74,12 @@ class NativeBridge:
                 continue
             for jar in cookies:
                 if "oauth_token" in jar:
-                    status = self._core.soundcloud_set_token(jar["oauth_token"].value)
+                    status = self._kernel.soundcloud_set_token(jar["oauth_token"].value)
                     login.destroy()
                     return status
         if not closed.is_set():
             login.destroy()
-        return self._core.soundcloud_status()
+        return self._kernel.soundcloud_status()
 
 
 GEOMETRY_FILE = DATA_DIR / "window.json"
@@ -136,12 +136,40 @@ def run():
 
 
     # Already open: bring that window to the front instead of a second app.
-    if not instance.acquire():
-        if instance.show_running():
-            return 0
-        runtime.alert("FreeTheNoize", "FreeTheNoize ya está abierto, pero no responde.\n\n"
-                      "Ciérralo desde el Administrador de tareas y vuelve a abrirlo.")
-        return 1
+    # If it is closing, wait for it and start; never an error dialog.
+    if not instance.acquire() and not instance.hand_over():
+        log.info("ya había una instancia abierta: se le pide que se muestre")
+        return 0
+
+    # Answer later launches from now on, also while starting and closing.
+    ui = {"window": None, "kernel": None, "pending": False, "closing": False}
+
+    def on_show():
+        if ui["closing"]:
+            return "closing"
+        if ui["window"] is None:
+            ui["pending"] = True   # shown as soon as it exists
+            return "ok"
+        _bring_to_front()
+        return "ok"
+
+    def _bring_to_front():
+        if ui["kernel"]:
+            ui["kernel"].emit("reopened", {})   # page shows "ya estaba abierto"
+        if in_browser.is_set():
+            import webbrowser
+
+            webbrowser.open(url)
+            return
+        w = ui["window"]
+        w.restore()
+        w.show()
+        w.on_top = True  # raise above other windows, then behave normally
+        w.on_top = False
+
+    in_browser = threading.Event()
+    url = ""
+    instance.serve(on_show)
 
     runtime.unblock_bundled_dlls()  # before pywebview loads .NET (Windows)
     step("instancia única + DLL desbloqueadas")
@@ -149,14 +177,15 @@ def run():
     import uvicorn
     import webview
 
-    from .core import Core
+    from .kernel import Kernel
     from .web import Auth, create_app
 
     step("imports")
-    core = Core()
-    core.start()
+    kernel = Kernel()
+    kernel.start()
+    ui["kernel"] = kernel
     auth = Auth(password=None, desktop=True)
-    app = create_app(core, auth)
+    app = create_app(kernel, auth)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -167,7 +196,7 @@ def run():
         time.sleep(0.02)
     step(f"servidor en 127.0.0.1:{port}")
 
-    bridge = NativeBridge(core)
+    bridge = NativeBridge(kernel)
     geometry = _load_geometry()
     window = webview.create_window(
         "FreeTheNoize",
@@ -186,20 +215,14 @@ def run():
     from . import popups
 
     url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
-    in_browser = threading.Event()
+    window.events.closing += lambda *_: ui.update(closing=True)
 
-    def on_show():
-        if in_browser.is_set():
-            import webbrowser
+    def ready(*_):
+        ui["window"] = window
+        if ui.pop("pending", False):
+            _bring_to_front()
 
-            webbrowser.open(url)
-            return
-        window.restore()
-        window.show()
-        window.on_top = True  # raise above other windows, then behave normally
-        window.on_top = False
-
-    instance.serve(on_show)
+    window.events.shown += ready
     popups.install()
     step("ventana creada, arrancando el motor web")
     try:
@@ -218,6 +241,7 @@ def run():
         import webbrowser
 
         in_browser.set()
+        ui["window"] = window
         print(f"No se pudo abrir la ventana ({exc}). Abriendo en el navegador: {url}")
         print("Ctrl+C para salir.")
         webbrowser.open(url)
@@ -226,5 +250,13 @@ def run():
                 time.sleep(1)
         except KeyboardInterrupt:
             pass
+    # Closing: the window is already gone. Stop what we own and leave at once;
+    # waiting for the interpreter and the web engine to tear down took seconds
+    # (and kept the lock, so a quick relaunch looked like a hung app).
+    ui["closing"] = True
+    t_close = time.monotonic()
     server.should_exit = True
-    core.stop()
+    kernel.stop()
+    log.info("cierre en %.2fs", time.monotonic() - t_close)
+    logging.shutdown()
+    os._exit(0)

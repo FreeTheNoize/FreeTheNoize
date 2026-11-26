@@ -1,16 +1,25 @@
-"""Fan-out of server events to every connected page (Server-Sent Events).
+"""Fan-out of events to every connected page (Server-Sent Events) and to
+listeners inside the process (other plugins, the terminal CLI).
 
-Producers are plain threads (downloads, conversions); consumers are asyncio
-queues, one per open page.
+Producers are plain threads (downloads, conversions); page consumers are
+asyncio queues, one per open page. Event kinds are "<plugin>.<event>" for
+plugins (the plugin's ctx.emit adds the prefix) and bare names for the kernel.
 """
 import asyncio
 import json
+import logging
 import threading
+from typing import Callable
+
+log = logging.getLogger("freethenoize")
+
+Listener = Callable[[str, dict], None]
 
 
 class EventBus:
     def __init__(self, maxsize: int = 1000):
         self._subs: set[tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = set()
+        self._listeners: list[Listener] = []
         self._lock = threading.Lock()
         self._maxsize = maxsize
 
@@ -24,10 +33,30 @@ class EventBus:
         with self._lock:
             self._subs = {s for s in self._subs if s[1] is not q}
 
+    def listen(self, fn: Listener) -> Callable[[], None]:
+        """Call fn(kind, payload) for every event, in the emitting thread.
+        Keep it quick; returns a function that removes the listener."""
+        with self._lock:
+            self._listeners.append(fn)
+
+        def remove():
+            with self._lock:
+                if fn in self._listeners:
+                    self._listeners.remove(fn)
+        return remove
+
     def emit(self, kind: str, payload: dict) -> None:
-        data = json.dumps({"kind": kind, "payload": payload}, default=str, ensure_ascii=False)
         with self._lock:
             subs = list(self._subs)
+            listeners = list(self._listeners)
+        for fn in listeners:
+            try:
+                fn(kind, payload)
+            except Exception:
+                log.exception("event listener failed on %s", kind)
+        if not subs:
+            return
+        data = json.dumps({"kind": kind, "payload": payload}, default=str, ensure_ascii=False)
         for loop, q in subs:
             try:
                 loop.call_soon_threadsafe(_put, q, data)

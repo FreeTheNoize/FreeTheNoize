@@ -4,9 +4,9 @@ import subprocess
 import numpy as np
 import pytest
 
-from freethenoize.analysis import compare, loudness, spectrum
-from freethenoize.downloads import naming, tagging
-from freethenoize.downloads.manager import describe_quality
+from freethenoize.audio import compare, loudness, spectrum, tagging
+from freethenoize.plugins.downloads import naming
+from freethenoize.plugins.downloads.service import describe_quality
 
 FFMPEG = shutil.which("ffmpeg")
 
@@ -103,13 +103,13 @@ def _clicks(bpm: float, seconds: int = 30, sr: int = 44_100) -> np.ndarray:
 
 @pytest.mark.parametrize("bpm", [90, 122.5, 128, 140, 174])
 def test_bpm(bpm):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     assert musical.analyze(_clicks(bpm), 44_100)["bpm"] == pytest.approx(bpm, abs=0.3)
 
 
 @pytest.mark.parametrize("hz", [40, 55, 110, 440])
 def test_no_bpm_for_steady_tone(hz):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     t = np.arange(44_100 * 20) / 44_100
     assert musical.analyze(np.sin(2 * np.pi * hz * t).astype(np.float32), 44_100)["bpm"] is None
 
@@ -120,7 +120,7 @@ def test_no_bpm_for_steady_tone(hz):
     ("F#m", "11A", [(6, 9, 13), (11, 14, 18), (1, 5, 8), (6, 9, 13)]),
 ])
 def test_key(name, camelot, chords):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     sr = 44_100
     tt = np.arange(sr * 2) / sr
     tone = lambda f: sum(np.sin(2 * np.pi * f * h * tt) / h for h in (1, 2, 3, 4))
@@ -140,7 +140,7 @@ def test_bpm_key_tags_roundtrip(tmp_path, ext):
 
 
 def test_archive_key():
-    from freethenoize.downloads.resolve import archive_key
+    from freethenoize.plugins.downloads.resolve import archive_key
     assert archive_key("Soundcloud", "123") == "soundcloud 123"
     assert archive_key(None, "123") is None
 
@@ -188,14 +188,42 @@ def test_single_desktop_instance(monkeypatch, tmp_path):
     monkeypatch.setattr(instance, "_held", None)
     shown = threading.Event()
 
+    state = {"answer": "ok"}
+
+    def on_show():
+        shown.set()
+        return state["answer"]
+
     assert instance.acquire()
-    instance.serve(shown.set)
+    instance.serve(on_show)
     held = instance._held
     try:
         # Same process: a new lock attempt sees the one already held.
         monkeypatch.setattr(instance, "_held", None)
         assert not instance.acquire()
-        assert instance.show_running()
+        assert instance.show_running() == "ok"
         assert shown.wait(2)
+        # A second launch just leaves: no dialog, no second app.
+        assert instance.hand_over(timeout=2) is False
+        # While closing it waits instead (here it gives up after the timeout).
+        state["answer"] = "closing"
+        assert instance.show_running() == "closing"
+        assert instance.hand_over(timeout=0.5) is False
     finally:
         instance._held = held
+
+
+def test_source_of_checks_the_real_hostname():
+    from freethenoize.ytdlp import source_of
+
+    assert source_of("https://soundcloud.com/a/b") == "soundcloud"
+    assert source_of("https://m.soundcloud.com/a/b") == "soundcloud"
+    assert source_of("https://on.soundcloud.com/x") == "soundcloud"
+    assert source_of("https://snd.sc/x") == "soundcloud"
+    assert source_of("https://www.youtube.com/watch?v=1") == "youtube"
+    assert source_of("https://youtu.be/1") == "youtube"
+    for trap in ("https://evil.com/?soundcloud.com", "https://soundcloud.com.evil.com/a",
+                 "https://evilsoundcloud.com/a", "https://evil.com/soundcloud.com/a",
+                 "https://notyoutube.com/watch", "https://youtube.com.evil.com/x",
+                 "https://user@evil.com/soundcloud.com", "http://[::1/x", ""):
+        assert source_of(trap) == "other", trap

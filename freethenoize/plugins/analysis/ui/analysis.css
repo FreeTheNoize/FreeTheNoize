@@ -1,0 +1,29 @@
+/* Plugin analysis: A/B · Null view. Spectrogram, metrics and verdict styles are
+   shared components in the kernel (style.css). */
+
+.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.slot { display: flex; align-items: center; gap: 16px; padding: 18px; cursor: pointer; text-align: left;
+  border: 1px dashed var(--line-2); background: var(--surface); min-width: 0; }
+.slot:hover { border-color: var(--acid); }
+.slot.filled { border-style: solid; }
+.slot-key { font: 900 40px var(--display); line-height: 1; color: var(--text-3); }
+.slot.filled .slot-key { color: var(--acid); }
+.slot-name { font: 12px var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ab-bar { display: flex; align-items: center; gap: 14px; padding: 12px; flex-wrap: wrap; }
+.hint { color: var(--text-3); margin: 8px 0 16px; }
+.cmp-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+.cmp-table th, .cmp-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.cmp-table th { font: 10.5px var(--mono); color: var(--text-3); text-transform: uppercase; font-weight: 400; }
+.cmp-table td:first-child { font: 11px var(--mono); color: var(--text-3); text-transform: uppercase; width: 22%; }
+.cmp-table td.better { color: var(--acid); font-weight: 700; }
+.cmp-table td.better::after { content: " ◀"; font-size: 10px; }
+.null-card { padding: 18px; }
+.null-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.null-head h3 { margin: 0; font: 900 22px var(--display); text-transform: uppercase; letter-spacing: -.03em; }
+.null-head p { margin: 4px 0 0; color: var(--text-2); }
+
+@media (max-width: 860px) {
+  .slots { grid-template-columns: 1fr; }
+  .ab-bar .seek { order: 10; flex-basis: 100%; }
+}

@@ -9,9 +9,9 @@ import secrets
 import subprocess
 import threading
 import time
-from typing import Callable, Iterator
+from typing import Iterator
 
-from . import ffmpeg
+from ... import ffmpeg
 
 # Progressive HTTP first: it starts and seeks faster than HLS.
 FORMAT = "bestaudio[protocol=http]/bestaudio[protocol=https]/bestaudio/best"
@@ -21,8 +21,8 @@ CHUNK = 32 * 1024
 
 
 class Previews:
-    def __init__(self, params_for: Callable[[str], dict]):
-        self._params_for = params_for
+    def __init__(self, ctx):
+        self._params_for = ctx.ytdlp_params
         self._entries: dict[str, dict] = {}
         self._lock = threading.Lock()
 

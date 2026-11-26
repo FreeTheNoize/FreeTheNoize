@@ -1,0 +1,10 @@
+# Optional: `pip install pre-commit && pre-commit install` runs the architecture
+# check on the files you commit (CI runs it on everything anyway).
+repos:
+  - repo: local
+    hooks:
+      - id: ftn-architecture
+        name: FreeTheNoize architecture rules
+        entry: python tools/check_architecture.py
+        language: system
+        files: ^freethenoize/.*\.(py|js)$

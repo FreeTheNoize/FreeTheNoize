@@ -2,6 +2,8 @@
 import re
 import string
 
+from ...files import safe_filename
+
 # Promo noise uploaders put in titles: "[FREE DL]", "(Out Now!)", "*PREMIERE*"…
 _NOISE_WORDS = (
     r"free\s*(?:dl|d/?l|download)|out\s*now!*|premiere|preview|snippet"
@@ -14,13 +16,6 @@ _BRACKETED_NOISE = re.compile(
 _TRAILING_NOISE = re.compile(
     rf"\s*(?:\||//|\*|—|–|-)\s*(?:{_NOISE_WORDS})\s*$", re.IGNORECASE
 )
-_ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-_WINDOWS_RESERVED = {
-    "con", "prn", "aux", "nul",
-    *(f"com{i}" for i in range(1, 10)),
-    *(f"lpt{i}" for i in range(1, 10)),
-}
-
 DEFAULT_TEMPLATE = "{artist} - {title}"
 TEMPLATE_FIELDS = ("artist", "title", "uploader", "playlist", "index", "date", "id")
 
@@ -42,14 +37,6 @@ def split_artist_title(title: str, uploader: str) -> tuple[str, str]:
             if artist.strip() and rest.strip():
                 return artist.strip(), rest.strip()
     return uploader, title
-
-
-def safe_filename(name: str, max_len: int = 180) -> str:
-    name = _ILLEGAL.sub("_", name)
-    name = re.sub(r"\s{2,}", " ", name).strip().rstrip(". ")
-    if name.lower() in _WINDOWS_RESERVED:
-        name = f"_{name}"
-    return name[:max_len].rstrip(". ") or "untitled"
 
 
 class _Blank(dict):

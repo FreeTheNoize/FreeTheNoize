@@ -1,4 +1,5 @@
-"""Keeps yt-dlp up to date without shipping a new version of the app.
+"""yt-dlp for the whole app: kept up to date without shipping a new version,
+and the base parameters every plugin uses (SoundCloud session included).
 
 SoundCloud and YouTube change often and break yt-dlp. yt-dlp publishes a
 pure-Python zipapp on every release; we download it into the user data
@@ -11,8 +12,9 @@ import re
 import sys
 import urllib.request
 import zipfile
+from urllib.parse import urlparse
 
-from .paths import YTDLP_ZIP
+from . import paths
 
 _RELEASES = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
 
@@ -53,7 +55,7 @@ def activate() -> None:
     """Call once at startup, before importing yt_dlp anywhere."""
     if "yt_dlp" in sys.modules:
         raise RuntimeError("activate() must run before yt_dlp is imported")
-    downloaded = _zip_version(YTDLP_ZIP) if YTDLP_ZIP.exists() else None
+    downloaded = _zip_version(paths.YTDLP_ZIP) if paths.YTDLP_ZIP.exists() else None
     if not downloaded:
         return
     try:
@@ -63,7 +65,7 @@ def activate() -> None:
     except Exception:
         bundled = "0"
     if _version_key(downloaded) > _version_key(bundled):
-        sys.meta_path.insert(0, _ZipFirstFinder(str(YTDLP_ZIP)))
+        sys.meta_path.insert(0, _ZipFirstFinder(str(paths.YTDLP_ZIP)))
 
 
 def current_version() -> str:
@@ -94,10 +96,49 @@ def update() -> dict:
     if hashlib.sha256(payload).hexdigest() != expected:
         raise RuntimeError("La descarga de yt-dlp no coincide con su checksum.")
 
-    tmp = YTDLP_ZIP.with_suffix(".tmp")
+    tmp = paths.YTDLP_ZIP.with_suffix(".tmp")
     tmp.write_bytes(payload)
     if _zip_version(tmp) is None:
         tmp.unlink()
         raise RuntimeError("El archivo de yt-dlp descargado no es válido.")
-    tmp.replace(YTDLP_ZIP)
+    tmp.replace(paths.YTDLP_ZIP)
     return {"updated": True, "version": latest, "restart_required": True}
+
+
+# ── Parameters shared by every plugin ────────────────────────────────────────
+
+def _on_domain(host: str, domain: str) -> bool:
+    return host == domain or host.endswith("." + domain)
+
+
+def source_of(url: str) -> str:
+    """Which site a URL belongs to, by its real hostname (not a substring:
+    evil.com/?soundcloud.com and soundcloud.com.evil.com are "other")."""
+    try:
+        host = (urlparse(url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return "other"
+    if _on_domain(host, "soundcloud.com") or host == "snd.sc":
+        return "soundcloud"
+    if _on_domain(host, "youtube.com") or host == "youtu.be":
+        return "youtube"
+    return "other"
+
+
+def base_params(url: str = "") -> dict:
+    """YoutubeDL params with ffmpeg and, for SoundCloud, the user's session."""
+    from . import ffmpeg, settings
+
+    params = {
+        "quiet": True,
+        "no_warnings": False,
+        "noprogress": True,
+        "ffmpeg_location": ffmpeg.FFMPEG,
+        "retries": 5,
+        "fragment_retries": 10,
+        "socket_timeout": 30,
+    }
+    if source_of(url) == "soundcloud" and (token := settings.get_token()):
+        params["username"] = "oauth"
+        params["password"] = token
+    return params
