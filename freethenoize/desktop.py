@@ -155,8 +155,11 @@ def run():
     popups.install()
     step("ventana creada, arrancando el motor web")
     try:
-        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False,
-                      icon=str(Path(__file__).parent / "ui" / "icon-512.png"))
+        # The icon argument is only for Linux (GTK/Qt). On Windows pywebview
+        # loads it with System.Drawing.Icon, which rejects a PNG and kills the
+        # process from .NET; the window takes the exe's icon there anyway.
+        icon = str(Path(__file__).parent / "ui" / "icon-512.png") if sys.platform.startswith("linux") else None
+        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False, icon=icon)
     except Exception as exc:
         log.exception("no se pudo abrir la ventana")
         # No usable GUI backend (e.g. a Linux box without Qt/GTK libraries):

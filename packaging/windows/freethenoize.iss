@@ -45,6 +45,8 @@ UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 LicenseFile=..\..\LICENSE
 WizardStyle=modern
+; No language prompt: it blocked silent installs. Uses the Windows UI language.
+ShowLanguageDialog=no
 Compression=lzma2/max
 SolidCompression=yes
 ; Close a running FreeTheNoize before replacing its files (Restart Manager).
