@@ -1,0 +1,19 @@
+/* Plugin library: the music table. Uses the kernel tokens (style.css). */
+
+table.lib { width: 100%; border-collapse: collapse; }
+.lib th { font: 10.5px var(--mono); color: var(--text-3); text-transform: uppercase; letter-spacing: .08em;
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line-2); font-weight: 400; white-space: nowrap; }
+.lib td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.lib tr:hover td { background: var(--bg-2); }
+.lib tr.playing td { background: var(--acid-dim); }
+.lib td.num, .lib th.num { text-align: right; font-family: var(--mono); font-size: 12px; }
+.lib td:first-child { width: 48px; }
+.lib .art { width: 40px; height: 40px; cursor: pointer; position: relative; }
+.lib .art:hover::before { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: var(--acid); }
+.lib .fmt { font: 11px var(--mono); color: var(--text-2); white-space: nowrap; }
+.lib td.act { text-align: right; white-space: nowrap; }
+.lib .tt { max-width: 0; width: 50%; }
+
+@media (max-width: 860px) {
+  .lib .fmt, .lib th:nth-child(5), .lib td:nth-child(5), .lib th:nth-child(6), .lib td:nth-child(6) { display: none; }
+}

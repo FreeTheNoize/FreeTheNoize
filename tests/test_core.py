@@ -4,9 +4,9 @@ import subprocess
 import numpy as np
 import pytest
 
-from freethenoize.analysis import compare, loudness, spectrum
-from freethenoize.downloads import naming, tagging
-from freethenoize.downloads.manager import describe_quality
+from freethenoize.audio import compare, loudness, spectrum, tagging
+from freethenoize.plugins.downloads import naming
+from freethenoize.plugins.downloads.service import describe_quality
 
 FFMPEG = shutil.which("ffmpeg")
 
@@ -103,13 +103,13 @@ def _clicks(bpm: float, seconds: int = 30, sr: int = 44_100) -> np.ndarray:
 
 @pytest.mark.parametrize("bpm", [90, 122.5, 128, 140, 174])
 def test_bpm(bpm):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     assert musical.analyze(_clicks(bpm), 44_100)["bpm"] == pytest.approx(bpm, abs=0.3)
 
 
 @pytest.mark.parametrize("hz", [40, 55, 110, 440])
 def test_no_bpm_for_steady_tone(hz):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     t = np.arange(44_100 * 20) / 44_100
     assert musical.analyze(np.sin(2 * np.pi * hz * t).astype(np.float32), 44_100)["bpm"] is None
 
@@ -120,7 +120,7 @@ def test_no_bpm_for_steady_tone(hz):
     ("F#m", "11A", [(6, 9, 13), (11, 14, 18), (1, 5, 8), (6, 9, 13)]),
 ])
 def test_key(name, camelot, chords):
-    from freethenoize.analysis import musical
+    from freethenoize.audio import musical
     sr = 44_100
     tt = np.arange(sr * 2) / sr
     tone = lambda f: sum(np.sin(2 * np.pi * f * h * tt) / h for h in (1, 2, 3, 4))
@@ -140,7 +140,7 @@ def test_bpm_key_tags_roundtrip(tmp_path, ext):
 
 
 def test_archive_key():
-    from freethenoize.downloads.resolve import archive_key
+    from freethenoize.plugins.downloads.resolve import archive_key
     assert archive_key("Soundcloud", "123") == "soundcloud 123"
     assert archive_key(None, "123") is None
 

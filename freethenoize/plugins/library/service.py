@@ -5,17 +5,28 @@ import os
 import threading
 from pathlib import Path
 
-from .paths import COVER_CACHE_DIR
+from ...audio.tagging import read_tags
+from ...files import AUDIO_EXTS
 
-AUDIO_EXTS = {".wav", ".flac", ".aif", ".aiff", ".mp3", ".m4a", ".aac", ".opus", ".ogg", ".alac"}
 MAX_FILES = 20_000
 
 
 class Library:
-    def __init__(self):
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self._covers = ctx.cache_dir
         self._cache: dict[str, tuple[tuple, dict]] = {}
         self._lock = threading.Lock()
-        COVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    def listing(self) -> dict:
+        root = self.ctx.music_dir()
+        return {"root": "" if self.ctx.is_server() else str(root), "items": self.scan(root)}
+
+    def delete(self, path: Path) -> None:
+        if not path.is_file() or path.suffix.lower() not in AUDIO_EXTS:
+            raise ValueError("Solo se pueden borrar archivos de audio.")
+        path.unlink()
+        self.ctx.emit("changed", {"removed": str(path)})
 
     def scan(self, root: str | Path) -> list[dict]:
         root = Path(root).expanduser()
@@ -61,14 +72,12 @@ class Library:
         p = Path(path)
         st = p.stat()
         key = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{size}".encode()).hexdigest()[:24]
-        target = COVER_CACHE_DIR / f"{key}.jpg"
+        target = self._covers / f"{key}.jpg"
         if target.exists():
             return target
         miss = target.with_suffix(".none")
         if miss.exists():
             return None
-        from .downloads.tagging import read_tags
-
         try:
             _, data = read_tags(p)
         except Exception:
@@ -98,8 +107,6 @@ def _read_entry(p: Path, st: os.stat_result) -> dict:
     }
     try:
         from mutagen import File as MutagenFile
-
-        from .downloads.tagging import read_tags
 
         audio = MutagenFile(p)
         if audio is not None:

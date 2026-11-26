@@ -1,9 +1,12 @@
-"""Batch conversion, keeping tags and artwork."""
+"""Batch conversion, keeping tags and artwork. The only place where audio is
+re-encoded on purpose (see CONTRIBUTING › principios)."""
+import secrets
+import threading
 from pathlib import Path
 
-from . import ffmpeg
-from .analysis.decode import probe
-from .downloads import tagging
+from ... import ffmpeg
+from ...audio import tagging
+from ...audio.decode import probe
 
 FORMATS = {
     "wav":  {"label": "WAV",  "ext": ".wav",  "lossless": True},
@@ -27,7 +30,7 @@ def _codec_args(fmt: str, bits: int | None) -> list[str]:
 
 def _normalize_filter(src: Path, info: dict, target_lufs: float) -> tuple[list[str], str]:
     """Static gain to hit target_lufs; a limiter only if the peaks would clip."""
-    from .analysis import decode, loudness
+    from ...audio import decode, loudness
 
     sr = min(info.get("sample_rate") or 44_100, 96_000)
     m = loudness.measure(decode.decode(src, sr, channels=2), sr)
@@ -76,3 +79,34 @@ def convert_one(src: str, fmt: str, out_dir: str | None, normalize_lufs: float |
         warning = f"{warning + ' ' if warning else ''}No se han copiado las etiquetas: {e}"
     tmp.replace(dest)
     return {"src": str(src_path), "dest": str(dest), "warning": warning, "note": note}
+
+
+class ConvertService:
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    def state(self) -> dict:
+        return {"formats": {k: v["label"] for k, v in FORMATS.items()}}
+
+    def convert(self, paths: list[Path], fmt: str, dest: Path | None = None,
+                normalize_lufs: float | None = None) -> dict:
+        """Runs in the background; reports convert.progress events per file
+        and one with status "finished" for the batch."""
+        if fmt not in FORMATS:
+            raise ValueError(f"Formato desconocido: {fmt}")
+        batch = secrets.token_hex(4)
+        emit = self.ctx.emit
+
+        def work():
+            for i, src in enumerate(paths):
+                emit("progress", {"batch": batch, "index": i, "src": str(src), "status": "running"})
+                try:
+                    res = convert_one(str(src), fmt, str(dest) if dest else None, normalize_lufs)
+                    emit("progress", {"batch": batch, "index": i, "status": "done", **res})
+                except Exception as e:
+                    emit("progress", {"batch": batch, "index": i, "src": str(src),
+                                      "status": "error", "error": str(e)})
+            emit("progress", {"batch": batch, "status": "finished"})
+
+        threading.Thread(target=work, daemon=True, name=f"convert-{batch}").start()
+        return {"started": len(paths), "batch": batch}

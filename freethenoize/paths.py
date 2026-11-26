@@ -5,6 +5,11 @@ Program Files and on macOS inside a signed .app bundle, both read-only.
 
 `FTN_DATA_DIR` puts config, data and cache under one directory (Docker
 volume); `FTN_MUSIC_DIR` sets the default download folder.
+
+Plugins never use these constants directly: they get their own folders from
+`ctx.data_dir` / `ctx.cache_dir` (DATA_DIR/<plugin>, CACHE_DIR/<plugin>).
+Kernel code reads them as `paths.X` at call time, so tests only have to
+reload this module after changing the environment.
 """
 import os
 from pathlib import Path
@@ -38,12 +43,8 @@ CONFIG_DIR, DATA_DIR, CACHE_DIR = _dirs()
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 TOKEN_FILE = CONFIG_DIR / "soundcloud-token"
 SECRET_FILE = CONFIG_DIR / "session-secret"
-ARCHIVE_FILE = DATA_DIR / "archive.txt"
-HISTORY_FILE = DATA_DIR / "history.jsonl"
-SUBSCRIPTIONS_FILE = DATA_DIR / "subscriptions.json"
 YTDLP_ZIP = DATA_DIR / "yt-dlp.zip"
 AUDIO_CACHE_DIR = CACHE_DIR / "audio"
-COVER_CACHE_DIR = CACHE_DIR / "covers"
 UPLOAD_DIR = CACHE_DIR / "uploads"
 
 # PyInstaller keeps package data next to the modules, so this works frozen too.

@@ -17,18 +17,17 @@ def _serve(args):
     import uvicorn
 
     from . import logs
-
-    from .core import Core
+    from .kernel import Kernel
     from .web import Auth, create_app
 
     password = args.password or os.environ.get("FTN_PASSWORD")
     if not password and args.host not in ("127.0.0.1", "localhost", "::1"):
         print("AVISO: escuchando en la red sin contraseña. Define FTN_PASSWORD.", file=sys.stderr)
-    core = Core()
-    core.start()
-    app = create_app(core, Auth(password=password, desktop=False))
+    kernel = Kernel()
+    kernel.start()
+    app = create_app(kernel, Auth(password=password, desktop=False))
     print(f"FreeTheNoize {__version__} en http://{args.host}:{args.port}  "
-          f"(música: {core.settings['download_dir']})", flush=True)
+          f"(música: {kernel.settings['download_dir']})", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level=logs.uvicorn_level(),
                 proxy_headers=True, forwarded_allow_ips=os.environ.get("FTN_TRUSTED_PROXIES", "127.0.0.1"))
 
@@ -37,11 +36,16 @@ def _get(args):
     import threading
     import time
 
-    from .core import Core
+    from .kernel import Kernel
 
-    core = Core()
+    kernel = Kernel()
+    try:
+        downloads = kernel.service("downloads")
+    except KeyError:
+        print("El complemento de descargas está desactivado.", file=sys.stderr)
+        return 2
     if args.out:
-        core.settings.override("download_dir", str(Path(args.out).expanduser().resolve()))
+        kernel.settings.override("download_dir", str(Path(args.out).expanduser().resolve()))
     lock = threading.Lock()
     pending_links = len(args.urls)
     finished = {}
@@ -49,13 +53,13 @@ def _get(args):
     def on_event(kind, p):
         nonlocal pending_links
         with lock:
-            if kind == "resolving" and not p.get("active"):
+            if kind == "downloads.resolving" and not p.get("active"):
                 pending_links -= 1
                 if p.get("error"):
                     print(f"✗ {p['url']}: {p['error']}", file=sys.stderr)
                 elif p.get("skipped"):
                     print(f"· {p.get('title') or p['url']}: {p['count']} nuevas, {p['skipped']} ya descargadas")
-            elif kind == "job" and p["status"] in ("done", "skipped", "error", "cancelled"):
+            elif kind == "downloads.job" and p["status"] in ("done", "skipped", "error", "cancelled"):
                 if p["id"] not in finished:
                     finished[p["id"]] = p["status"]
                     q = (p.get("quality") or {}).get("label", "")
@@ -68,18 +72,18 @@ def _get(args):
                         line += f"  {p['error']}"
                     print(line, flush=True)
 
-    core.downloads.emit = on_event
-    core.downloads.add(args.urls)
+    kernel.bus.listen(on_event)
+    downloads.add(args.urls)
     try:
         while True:
             time.sleep(0.3)
             with lock:
                 busy = pending_links > 0 or any(
-                    j["status"] in ("queued", "downloading", "tagging") for j in core.downloads.snapshot())
+                    j["status"] in ("queued", "downloading", "tagging") for j in downloads.snapshot())
             if not busy:
                 break
     except KeyboardInterrupt:
-        core.downloads.cancel_all()
+        downloads.cancel_all()
         return 130
     return 1 if any(s == "error" for s in finished.values()) else 0
 
@@ -113,10 +117,10 @@ def main(argv=None):
     log_path = logs.setup()
     logging.getLogger("freethenoize").info("FreeTheNoize %s %s, log %s", __version__, args.cmd or "app", log_path)
 
-    from . import ytdlp_loader
+    from . import ytdlp
 
     # Must happen before anything imports yt_dlp.
-    ytdlp_loader.activate()
+    ytdlp.activate()
 
     if args.cmd == "serve":
         return _serve(args)

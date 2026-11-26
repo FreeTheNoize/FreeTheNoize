@@ -21,8 +21,8 @@ AUDIO_TYPES = ("Audio (*.wav;*.flac;*.aif;*.aiff;*.mp3;*.m4a;*.aac;*.opus;*.ogg)
 class NativeBridge:
     """Exposed to JavaScript as window.pywebview.api."""
 
-    def __init__(self, core):
-        self._core = core
+    def __init__(self, kernel):
+        self._kernel = kernel
         self._window = None
 
     def choose_folder(self, start: str = "") -> str | None:
@@ -74,12 +74,12 @@ class NativeBridge:
                 continue
             for jar in cookies:
                 if "oauth_token" in jar:
-                    status = self._core.soundcloud_set_token(jar["oauth_token"].value)
+                    status = self._kernel.soundcloud_set_token(jar["oauth_token"].value)
                     login.destroy()
                     return status
         if not closed.is_set():
             login.destroy()
-        return self._core.soundcloud_status()
+        return self._kernel.soundcloud_status()
 
 
 GEOMETRY_FILE = DATA_DIR / "window.json"
@@ -149,14 +149,14 @@ def run():
     import uvicorn
     import webview
 
-    from .core import Core
+    from .kernel import Kernel
     from .web import Auth, create_app
 
     step("imports")
-    core = Core()
-    core.start()
+    kernel = Kernel()
+    kernel.start()
     auth = Auth(password=None, desktop=True)
-    app = create_app(core, auth)
+    app = create_app(kernel, auth)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -167,7 +167,7 @@ def run():
         time.sleep(0.02)
     step(f"servidor en 127.0.0.1:{port}")
 
-    bridge = NativeBridge(core)
+    bridge = NativeBridge(kernel)
     geometry = _load_geometry()
     window = webview.create_window(
         "FreeTheNoize",
@@ -227,4 +227,4 @@ def run():
         except KeyboardInterrupt:
             pass
     server.should_exit = True
-    core.stop()
+    kernel.stop()

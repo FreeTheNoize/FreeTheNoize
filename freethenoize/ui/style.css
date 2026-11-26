@@ -320,23 +320,10 @@ kbd { font: 10.5px var(--mono); padding: 1px 6px; border: 1px solid var(--line-2
 .spin { width: 12px; height: 12px; border: 2px solid var(--line-2); border-top-color: var(--acid); border-radius: 50%; animation: rot .7s linear infinite; flex: none; }
 @keyframes rot { to { transform: rotate(360deg); } }
 
-/* ── Library ───────────────────────────────────────────────────────────── */
+/* ── Filters, tables ───────────────────────────────────────────────────── */
 
 .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .table-wrap { overflow-x: auto; }
-table.lib { width: 100%; border-collapse: collapse; }
-.lib th { font: 10.5px var(--mono); color: var(--text-3); text-transform: uppercase; letter-spacing: .08em;
-  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line-2); font-weight: 400; white-space: nowrap; }
-.lib td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.lib tr:hover td { background: var(--bg-2); }
-.lib tr.playing td { background: var(--acid-dim); }
-.lib td.num, .lib th.num { text-align: right; font-family: var(--mono); font-size: 12px; }
-.lib td:first-child { width: 48px; }
-.lib .art { width: 40px; height: 40px; cursor: pointer; position: relative; }
-.lib .art:hover::before { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: var(--acid); }
-.lib .fmt { font: 11px var(--mono); color: var(--text-2); white-space: nowrap; }
-.lib td.act { text-align: right; white-space: nowrap; }
-.lib .tt { max-width: 0; width: 50%; }
 
 /* ── Panels, metrics, verdicts ─────────────────────────────────────────── */
 
@@ -367,28 +354,6 @@ table.lib { width: 100%; border-collapse: collapse; }
 .spec-label { color: var(--text-2); margin: 12px 0 6px; }
 .curve { height: 90px; margin-top: 10px; border-top: 1px solid var(--line); }
 .curve svg { width: 100%; height: 100%; display: block; }
-
-.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
-.slot { display: flex; align-items: center; gap: 16px; padding: 18px; cursor: pointer; text-align: left;
-  border: 1px dashed var(--line-2); background: var(--surface); min-width: 0; }
-.slot:hover { border-color: var(--acid); }
-.slot.filled { border-style: solid; }
-.slot-key { font: 900 40px var(--display); line-height: 1; color: var(--text-3); }
-.slot.filled .slot-key { color: var(--acid); }
-.slot-name { font: 12px var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.ab-bar { display: flex; align-items: center; gap: 14px; padding: 12px; flex-wrap: wrap; }
-.hint { color: var(--text-3); margin: 8px 0 16px; }
-.cmp-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-.cmp-table th, .cmp-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; }
-.cmp-table th { font: 10.5px var(--mono); color: var(--text-3); text-transform: uppercase; font-weight: 400; }
-.cmp-table td:first-child { font: 11px var(--mono); color: var(--text-3); text-transform: uppercase; width: 22%; }
-.cmp-table td.better { color: var(--acid); font-weight: 700; }
-.cmp-table td.better::after { content: " ◀"; font-size: 10px; }
-.null-card { padding: 18px; }
-.null-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-.null-head h3 { margin: 0; font: 900 22px var(--display); text-transform: uppercase; letter-spacing: -.03em; }
-.null-head p { margin: 4px 0 0; color: var(--text-2); }
 
 .form-row { display: flex; align-items: center; gap: 12px; padding: 12px; margin-top: 16px; flex-wrap: wrap; }
 
@@ -457,7 +422,6 @@ body.has-player .toasts { bottom: 86px; }
   .ticker { display: none; }
   .content { padding: 22px 16px 48px; }
   .view-head.row { flex-direction: column; align-items: stretch; }
-  .slots { grid-template-columns: 1fr; }
   .row-item { grid-template-columns: 40px minmax(0, 1fr); }
   .row-item .art { width: 40px; height: 40px; }
   .row-item .actions { grid-column: 1 / -1; justify-content: flex-start; }
@@ -468,8 +432,6 @@ body.has-player .toasts { bottom: 86px; }
   .drop .btn { width: 100%; }
   .pl-meta { width: auto; flex: 1; }
   .player .seek, #pl-time { display: none; }
-  .lib .fmt, .lib th:nth-child(5), .lib td:nth-child(5), .lib th:nth-child(6), .lib td:nth-child(6) { display: none; }
-  .ab-bar .seek { order: 10; flex-basis: 100%; }
 }
 
 /* Pre-listen button while the stream is being resolved */

@@ -7,24 +7,21 @@ import json
 import secrets
 import threading
 import time
-from typing import Callable
-
-from .downloads.manager import DownloadManager
-from .paths import SUBSCRIPTIONS_FILE
 
 TICK_SECONDS = 60
 MIN_INTERVAL_H = 0.25
 
 
 class Subscriptions:
-    def __init__(self, downloads: DownloadManager, emit: Callable[[str, dict], None]):
-        self.downloads = downloads
-        self.emit = emit
+    def __init__(self, ctx):
+        self.downloads = ctx.require("downloads")
+        self.emit = ctx.emit
+        self._file = ctx.data_file("subscriptions.json", legacy="subscriptions.json")
         self._lock = threading.Lock()
         self._checking: set[str] = set()
         try:
             self._items: dict[str, dict] = {
-                s["id"]: s for s in json.loads(SUBSCRIPTIONS_FILE.read_text(encoding="utf-8"))
+                s["id"]: s for s in json.loads(self._file.read_text(encoding="utf-8"))
             }
         except (OSError, ValueError, KeyError, TypeError):
             self._items = {}
@@ -33,10 +30,10 @@ class Subscriptions:
     # ── Persistence ──────────────────────────────────────────────────────────
 
     def _save(self):
-        tmp = SUBSCRIPTIONS_FILE.with_suffix(".tmp")
+        tmp = self._file.with_suffix(".tmp")
         tmp.write_text(json.dumps(list(self._items.values()), indent=2, ensure_ascii=False),
                        encoding="utf-8")
-        tmp.replace(SUBSCRIPTIONS_FILE)
+        tmp.replace(self._file)
 
     def _public(self, sub: dict) -> dict:
         return {**sub, "checking": sub["id"] in self._checking,
@@ -44,9 +41,12 @@ class Subscriptions:
                 if sub["enabled"] else None}
 
     def _changed(self, sub: dict):
-        self.emit("subscription", self._public(sub))
+        self.emit("changed", self._public(sub))
 
     # ── API ──────────────────────────────────────────────────────────────────
+
+    def state(self) -> dict:
+        return {"items": self.list()}
 
     def list(self) -> list[dict]:
         with self._lock:
@@ -87,7 +87,7 @@ class Subscriptions:
         with self._lock:
             self._items.pop(sub_id, None)
             self._save()
-        self.emit("subscription_removed", {"id": sub_id})
+        self.emit("removed", {"id": sub_id})
 
     def check(self, sub_id: str) -> None:
         with self._lock:
