@@ -87,6 +87,7 @@ de los demás y deciden juntos quién entra
 ([GOVERNANCE.md](GOVERNANCE.md)). El objetivo: que cualquier DJ pueda conseguir la mejor calidad que existe de lo que
 pincha, saber la verdad sobre esa calidad y tenerlo listo para la cabina, sin anuncios, sin cuentas y sin rastreo.
 
+- 🗺️ Hacia dónde vamos: [Roadmap](https://github.com/orgs/FreeTheNoize/projects/1) (kernel y plugins en 0.4.0, CLI en 0.4.1, más fuentes en 0.5.0)
 - 💬 Ideas y dudas: [Discussions](https://github.com/FreeTheNoize/FreeTheNoize/discussions)
 - 🐛 Bugs y propuestas: [Issues](https://github.com/FreeTheNoize/FreeTheNoize/issues/new/choose)
 - 🔒 Fallos de seguridad: en privado, ver [SECURITY.md](SECURITY.md)
