@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FreeTheNoize</title>
+<meta name="description" content="Descarga tu música de SoundCloud a la máxima calidad disponible, comprueba qué calidad tiene de verdad y organízala para pinchar. Software libre para DJs.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0a0a0a">
+<meta property="og:title" content="FreeTheNoize">
+<meta property="og:description" content="Música a la máxima calidad disponible, con BPM, tonalidad y la verdad sobre la calidad. Software libre para DJs.">
+<meta property="og:image" content="img/demo-library.webp">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="site.css?v={{version}}">
+<script>
+  /* Theme before first paint: same key as the app, so the demo follows. */
+  try { const t = localStorage.getItem('ftn.theme'); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+</script>
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="top">
+  <a class="wordmark" href="#inicio" aria-label="FreeTheNoize, inicio"><span>FREE</span><span>THE</span><span>NOIZE</span></a>
+  <nav class="menu" aria-label="Secciones">
+    <a href="demo/">Demo</a>
+    <a href="#descargar">Descargar</a>
+    <a href="#servidor">Servidor</a>
+    <a href="#verificar">Verificar</a>
+    <a href="#colaborar">Colaborar</a>
+    <a href="https://github.com/FreeTheNoize/FreeTheNoize" rel="noopener">GitHub</a>
+  </nav>
+  <button class="theme" id="theme" type="button" aria-label="Cambiar tema claro u oscuro" title="Tema">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+  </button>
+</header>
+
+<main id="contenido">
+
+<section class="hero" id="inicio">
+  <div class="kicker">// v{{version}} · software libre · para djs</div>
+  <h1>Libera<br>el ruido</h1>
+  <p class="lead">Descarga tu música de SoundCloud a la <strong>máxima calidad disponible</strong>, comprueba qué calidad tiene
+    <strong>de verdad</strong> y organízala para pinchar: BPM, tonalidad en Camelot, carátula y etiquetas que leen Rekordbox,
+    Traktor y Serato.</p>
+  <div class="cta">
+    <a class="btn primary" href="demo/">Probar la demo</a>
+    <a class="btn" href="#descargar">Descargar</a>
+    <a class="btn ghost" href="#servidor">En tu servidor</a>
+  </div>
+  <p class="fine">Sin cuentas, sin anuncios, sin telemetría. Licencia GPL-2.0.</p>
+  <a class="shot hero-shot" href="demo/" aria-label="Abrir la demo">
+    <img class="themed" src="img/demo-library.webp" width="1366" height="860" data-dark="img/demo-library.webp" data-light="img/demo-library-light.webp" alt="La biblioteca de FreeTheNoize: temas con carátula, BPM, tonalidad Camelot, formato y duración, y el reproductor abajo.">
+  </a>
+</section>
+
+<section class="features" aria-labelledby="que-hace">
+  <h2 class="group-title" id="que-hace">// qué hace</h2>
+  <div class="grid">
+    <article>
+      <h3>Siempre la mejor fuente</h3>
+      <p>Primero el <strong>original</strong> que subió el artista (WAV, FLAC, AIFF) si permite descargas; si no, AAC 256 con
+        Go+, y si no, lo que haya. Sin recodificar nunca, y con una etiqueta que dice la calidad <em>real</em> que has
+        conseguido.</p>
+    </article>
+    <article>
+      <h3>Listo para pinchar</h3>
+      <p>BPM y tonalidad (Camelot) de cada descarga, escritos en las etiquetas. Título limpio, artista separado, carátula
+        incrustada en todos los formatos.</p>
+    </article>
+    <article>
+      <h3>Radiografía del audio</h3>
+      <p>Espectrograma, corte de frecuencias para cazar <strong>falsos lossless</strong>, LUFS, true peak, LRA y PLR. Compara
+        dos versiones A/B con el volumen igualado y haz un null test.</p>
+    </article>
+    <article>
+      <h3>Suscripciones</h3>
+      <p>Sigue tus likes, playlists o perfiles: se revisan solos y bajan solo lo nuevo, sin volver a pedir lo que ya
+        tienes.</p>
+    </article>
+    <article>
+      <h3>Biblioteca y conversor</h3>
+      <p>Tu carpeta de música filtrable por título, artista, BPM o Camelot, con reproductor. Convierte en lote a WAV, AIFF,
+        FLAC, MP3 o AAC conservando etiquetas y carátula.</p>
+    </article>
+    <article>
+      <h3>Escritorio o servidor</h3>
+      <p>App para macOS, Windows y Linux, o servicio web en Docker para tenerlo en tu servidor o NAS y usarlo desde el
+        móvil. La misma interfaz en los dos.</p>
+    </article>
+  </div>
+  <div class="shots">
+    <figure>
+      <a class="shot" href="demo/"><img src="img/demo-analyze.webp" width="1366" height="860" loading="lazy" alt="Espectro de un tema: BPM, tonalidad, formato, loudness y el espectrograma completo."></a>
+      <figcaption>Espectro: lo que hay de verdad dentro del archivo.</figcaption>
+    </figure>
+    <figure>
+      <a class="shot" href="demo/"><img src="img/demo-downloads.webp" width="1366" height="860" loading="lazy" alt="Cola de descargas con la calidad conseguida en cada tema: original FLAC, original WAV, AAC 256 Go+."></a>
+      <figcaption>Descargas: cada tema dice qué calidad has conseguido.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="descargar" aria-labelledby="h-descargar">
+  <div class="kicker">// descargar · v{{version}}</div>
+  <h2 id="h-descargar">Descargar</h2>
+  <div class="downloads">
+    <div class="dl">
+      <h3>Windows</h3>
+      <a class="btn primary" href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-Windows-x64-Setup.exe">Instalador (x64)</a>
+      <a class="alt" href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-Windows-x64-Portable.zip">Versión portable (.zip)</a>
+    </div>
+    <div class="dl">
+      <h3>macOS</h3>
+      <a class="btn primary" href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-macOS-AppleSilicon.dmg">Apple Silicon (.dmg)</a>
+      <a class="alt" href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-macOS-Intel.dmg">Intel (.dmg)</a>
+      <span class="alt">En .zip: <a href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-macOS-AppleSilicon.zip">Apple Silicon</a> ·
+        <a href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-macOS-Intel.zip">Intel</a></span>
+    </div>
+    <div class="dl">
+      <h3>Linux</h3>
+      <a class="btn primary" href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/FreeTheNoize-Linux-x64.zip">x64 (.zip)</a>
+      <a class="alt" href="#servidor">O mejor: el servicio en Docker</a>
+    </div>
+  </div>
+  <p class="fine"><a href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest">Todas las descargas y las notas de la versión</a> ·
+    <a href="https://github.com/FreeTheNoize/FreeTheNoize/releases/latest/download/SHA256SUMS.txt">SHA256SUMS.txt</a></p>
+
+  <div class="hazard" role="note">
+    <strong>Las apps no están firmadas.</strong> El proyecto no paga cuentas de desarrollador de Apple ni certificados de
+    Windows, así que el sistema avisará la primera vez:
+    <ul>
+      <li><strong>Windows:</strong> SmartScreen dice «Windows protegió su PC». Pulsa <em>Más información</em> →
+        <em>Ejecutar de todas formas</em>.</li>
+      <li><strong>macOS:</strong> dice que no puede comprobar el desarrollador. Ve a <em>Ajustes del Sistema → Privacidad y
+        seguridad</em> y pulsa <em>Abrir igualmente</em> (solo la primera vez).</li>
+    </ul>
+    Puedes comprobar que el archivo sale sin tocar de nuestro CI: <a href="#verificar">verificar las descargas</a>.
+  </div>
+</section>
+
+<section id="servidor" aria-labelledby="h-servidor">
+  <div class="kicker">// recomendado</div>
+  <h2 id="h-servidor">En tu propio servidor</h2>
+  <p>FreeTheNoize funciona como <strong>servicio web</strong>: lo dejas corriendo en tu servidor, NAS o mini PC y lo usas
+    desde el navegador del portátil o del móvil, con la misma interfaz que la app. Es la vía verificada de punta a punta:
+    la imagen va firmada y no hay nada que abrir «igualmente».</p>
+  <p>Guarda esto como <code>compose.yaml</code>:</p>
+  <div class="code"><button class="copy" type="button" data-copy="compose">Copiar</button><pre id="compose"><code>services:
+  freethenoize:
+    image: ghcr.io/freethenoize/freethenoize:latest
+    ports: ["127.0.0.1:8765:8765"]   # solo esta máquina; fuera, por el túnel
+    environment:
+      FTN_PASSWORD: ${FTN_PASSWORD:?define FTN_PASSWORD}
+    volumes:
+      - ./data:/data     # ajustes, historial, suscripciones
+      - ./music:/music   # tu música
+    restart: unless-stopped</code></pre></div>
+  <div class="code"><button class="copy" type="button" data-copy="up">Copiar</button><pre id="up"><code>FTN_PASSWORD='una-frase-larga' docker compose up -d
+# → http://localhost:8765</code></pre></div>
+  <p>Para actualizar: <code>docker compose pull &amp;&amp; docker compose up -d</code>.</p>
+
+  <h3>Acceso desde fuera, con HTTPS y sin abrir puertos</h3>
+  <div class="two">
+    <div>
+      <h4>Tailscale (privado)</h4>
+      <p>Solo tus dispositivos lo ven. En la máquina del servidor:</p>
+      <div class="code"><pre><code>tailscale serve --bg 8765</code></pre></div>
+      <p class="fine">Te da una dirección <code>https://…ts.net</code> dentro de tu red de Tailscale.</p>
+    </div>
+    <div>
+      <h4>Cloudflare Tunnel</h4>
+      <p>Con tu dominio. Crea un túnel con <code>cloudflared</code> que apunte a <code>http://localhost:8765</code> y,
+        si quieres, ponle Cloudflare Access delante.</p>
+      <p class="fine">Pon siempre <code>FTN_PASSWORD</code> si el servicio es accesible desde fuera de tu máquina.</p>
+    </div>
+  </div>
+  <p class="fine">Todas las variables (<code>FTN_MUSIC_DIR</code>, <code>FTN_SOUNDCLOUD_TOKEN</code>, <code>FTN_TRUSTED_PROXIES</code>…)
+    en el <a href="https://github.com/FreeTheNoize/FreeTheNoize#servicio-web-docker">README</a>.</p>
+</section>
+
+<section id="verificar" aria-labelledby="h-verificar">
+  <div class="kicker">// confianza</div>
+  <h2 id="h-verificar">Verificar las descargas</h2>
+  <p>Cada release trae sus sumas SHA-256 y una <strong>atestación de procedencia</strong>: la prueba, firmada por GitHub, de
+    que el archivo lo construyó el CI de este repositorio a partir de su código.</p>
+  <div class="code"><button class="copy" type="button" data-copy="sums">Copiar</button><pre id="sums"><code># Suma SHA-256 (macOS: shasum -a 256 -c …)
+sha256sum -c SHA256SUMS.txt --ignore-missing
+
+# Procedencia (CLI de GitHub)
+gh attestation verify FreeTheNoize-Windows-x64-Setup.exe -R FreeTheNoize/FreeTheNoize</code></pre></div>
+  <p>La imagen de Docker va además <strong>firmada con Sigstore</strong>, sin claves, con la identidad del workflow que la
+    construye:</p>
+  <div class="code"><button class="copy" type="button" data-copy="cosign">Copiar</button><pre id="cosign"><code>cosign verify ghcr.io/freethenoize/freethenoize:latest \
+  --certificate-identity-regexp '^https://github.com/FreeTheNoize/FreeTheNoize/\.github/workflows/docker\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/freethenoize/freethenoize:latest -R FreeTheNoize/FreeTheNoize</code></pre></div>
+</section>
+
+<section id="colaborar" aria-labelledby="h-colaborar">
+  <div class="kicker">// proyecto comunitario</div>
+  <h2 id="h-colaborar">Colaborar</h2>
+  <p>FreeTheNoize es un <strong>kernel pequeño con complementos</strong>: descargas, biblioteca, espectro, conversor…
+    cada función es una carpeta independiente. Para añadir una no hace falta entender el resto.</p>
+  <div class="code"><button class="copy" type="button" data-copy="plugin">Copiar</button><pre id="plugin"><code>git clone https://github.com/FreeTheNoize/FreeTheNoize && cd FreeTheNoize
+uv venv && uv pip install -e ".[desktop,dev]"
+python tools/new_plugin.py mi_funcion --title "Mi función"   # complemento listo para usar
+python tools/check_architecture.py && .venv/bin/python -m pytest</code></pre></div>
+  <ul class="links">
+    <li><a href="https://github.com/FreeTheNoize/FreeTheNoize/blob/develop/ARCHITECTURE.md">ARCHITECTURE.md</a> — cómo está hecho y el contrato de un complemento.</li>
+    <li><a href="https://github.com/FreeTheNoize/FreeTheNoize/blob/develop/CONTRIBUTING.md">CONTRIBUTING.md</a> — ramas, PR y versiones.</li>
+    <li><a href="https://github.com/FreeTheNoize/FreeTheNoize/blob/develop/AGENTS.md">AGENTS.md</a> — las reglas, también para quien programe con IA.</li>
+    <li><a href="https://github.com/orgs/FreeTheNoize/projects/1">Hoja de ruta</a> · <a href="https://github.com/FreeTheNoize/FreeTheNoize/issues">Issues</a> · <a href="https://github.com/FreeTheNoize/FreeTheNoize">Código</a></li>
+  </ul>
+</section>
+
+</main>
+
+<footer class="foot">
+  <p><strong>Úsalo solo con contenido que tengas derecho a descargar</strong>: tus propias pistas, descargas que el artista
+    permite o material con licencia libre. Respeta a quien hace la música.</p>
+  <p class="fine">FreeTheNoize es software libre (GPL-2.0) hecho por su comunidad. No está afiliado a SoundCloud ni a
+    YouTube; sus nombres solo se usan para describir con qué funciona. ·
+    <a href="https://github.com/FreeTheNoize/FreeTheNoize/blob/develop/SECURITY.md">Seguridad</a> ·
+    <a href="https://github.com/FreeTheNoize/FreeTheNoize/blob/develop/CODE_OF_CONDUCT.md">Código de conducta</a></p>
+</footer>
+
+<script src="site.js?v={{version}}"></script>
+</body>
+</html>
