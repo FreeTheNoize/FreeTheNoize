@@ -65,3 +65,46 @@ def client(kernel_factory):
 
 def login(c):
     assert c.post("/api/login", json={"password": "secret"}).status_code == 200
+
+
+def make_audio(path, seconds: float = 1.0, channels: int = 1, sr: int = 44_100):
+    """A sine tone in any format ffmpeg can encode. No lavfi: works with the
+    audio-only ffmpeg the app ships. Skips if this ffmpeg lacks the encoder."""
+    import subprocess
+    import wave
+
+    import numpy as np
+    import pytest
+
+    from freethenoize import ffmpeg
+
+    path = Path(path)
+    t = np.arange(int(sr * seconds)) / sr
+    pcm = (0.5 * np.sin(2 * np.pi * 440 * t) * 32767).astype("<i2")
+    pcm = np.repeat(pcm[:, None], channels, axis=1)
+    src = path.with_name(path.stem + ".src.wav")
+    with wave.open(str(src), "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm.tobytes())
+    res = ffmpeg.run(["-v", "error", "-y", "-i", str(src), str(path)], stdin=subprocess.DEVNULL)
+    src.unlink()
+    if res.returncode != 0:
+        pytest.skip(f"this ffmpeg cannot write {path.suffix}: {res.stderr.decode(errors='replace')[:200]}")
+    return path
+
+
+def make_png(w: int, h: int) -> bytes:
+    """A gradient PNG, without image libraries."""
+    import struct
+    import zlib
+
+    rows = b"".join(b"\x00" + b"".join(bytes((x * 255 // w, y * 255 // h, 128)) for x in range(w))
+                    for y in range(h))
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))

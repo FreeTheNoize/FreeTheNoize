@@ -1,0 +1,6 @@
+# The audio-only ffmpeg the desktop builds and the Docker image ship.
+# Built by .github/workflows/ffmpeg.yml (packaging/ffmpeg/build.sh) and
+# published as a release with this tag. After a new build, update the tag
+# and paste the SHA256SUMS that the workflow prints. packaging/ffmpeg/fetch.py
+# only accepts files with these hashes.
+tag ffmpeg-9.0.2-1

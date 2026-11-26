@@ -3,7 +3,7 @@ import shutil
 import subprocess
 
 import pytest
-from conftest import login
+from conftest import login, make_audio
 
 FFMPEG = shutil.which("ffmpeg")
 
@@ -52,7 +52,7 @@ def test_upload_rejects_non_audio(client):
 def test_library_stream_analyze(client):
     login(client)
     f = client.music / "Artist - Tune.flac"
-    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", "sine=d=3", "-ac", "2", str(f)], check=True)
+    make_audio(f, seconds=3, channels=2)
     items = client.get("/api/library").json()["items"]
     assert [i["rel"] for i in items] == ["Artist - Tune.flac"]
     assert client.get("/api/stream", params={"path": str(f)}, headers={"Range": "bytes=0-9"}).status_code == 206

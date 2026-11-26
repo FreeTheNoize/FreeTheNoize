@@ -65,6 +65,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           docker run -d --name ftn -p 8765:8765 -e FTN_PASSWORD=ci ftn:test
+          docker exec ftn ffmpeg -hide_banner -version | head -1
           for _ in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/health && exit 0; sleep 1; done
           docker logs ftn; exit 1
 

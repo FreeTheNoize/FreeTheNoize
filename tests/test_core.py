@@ -4,6 +4,9 @@ import subprocess
 import numpy as np
 import pytest
 
+from conftest import make_audio, make_png
+
+from freethenoize import ffmpeg
 from freethenoize.audio import compare, loudness, spectrum, tagging
 from freethenoize.plugins.downloads import naming
 from freethenoize.plugins.downloads.service import describe_quality
@@ -57,9 +60,10 @@ def test_cutoff_detects_lowpass():
     sr = 44_100
     rng = np.random.default_rng(0)
     noise = rng.standard_normal(sr * 20).astype(np.float32) * 0.1
-    from scipy import signal
-    sos = signal.butter(16, 16_000, fs=sr, output="sos")
-    lowpassed = signal.sosfilt(sos, noise).astype(np.float32)
+    # Brick-wall low-pass at 16 kHz, like a lossy encoder's.
+    spec = np.fft.rfft(noise)
+    spec[np.fft.rfftfreq(len(noise), 1 / sr) > 16_000] = 0
+    lowpassed = np.fft.irfft(spec, len(noise)).astype(np.float32)
     full = spectrum.detect_cutoff(noise, sr, lossless_container=True)
     cut = spectrum.detect_cutoff(lowpassed, sr, lossless_container=True)
     assert not full["sharp"] and full["level"] == "good"
@@ -81,8 +85,7 @@ def test_null_test_aligns_and_matches_gain():
 @pytest.mark.skipif(not FFMPEG, reason="needs ffmpeg")
 @pytest.mark.parametrize("ext", ["mp3", "wav", "aiff", "flac", "m4a", "opus"])
 def test_tag_roundtrip(tmp_path, ext):
-    path = tmp_path / f"t.{ext}"
-    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", "sine=d=1", str(path)], check=True)
+    path = make_audio(tmp_path / f"t.{ext}")
     cover = b"\x89PNG\r\n\x1a\n" + b"0" * 64
     meta = {"title": "Título", "artist": "Artista", "album": "Álbum", "date": "2024-05-01", "comment": "c"}
     assert tagging.write_tags(path, meta, cover)
@@ -91,7 +94,7 @@ def test_tag_roundtrip(tmp_path, ext):
     assert got_cover == cover
 
 
-def _clicks(bpm: float, seconds: int = 30, sr: int = 44_100) -> np.ndarray:
+def _clicks(bpm: float, seconds: int = 30, sr: int = 22_050) -> np.ndarray:
     t = np.arange(sr * seconds) / sr
     x = np.zeros_like(t)
     n = int(0.08 * sr)
@@ -104,14 +107,20 @@ def _clicks(bpm: float, seconds: int = 30, sr: int = 44_100) -> np.ndarray:
 @pytest.mark.parametrize("bpm", [90, 122.5, 128, 140, 174])
 def test_bpm(bpm):
     from freethenoize.audio import musical
-    assert musical.analyze(_clicks(bpm), 44_100)["bpm"] == pytest.approx(bpm, abs=0.3)
+    assert musical.analyze(_clicks(bpm), musical.RATE)["bpm"] == pytest.approx(bpm, abs=0.3)
+
+
+def test_musical_needs_its_rate():
+    from freethenoize.audio import musical
+    with pytest.raises(ValueError):
+        musical.analyze(np.zeros(44_100 * 5, np.float32), 44_100)
 
 
 @pytest.mark.parametrize("hz", [40, 55, 110, 440])
 def test_no_bpm_for_steady_tone(hz):
     from freethenoize.audio import musical
-    t = np.arange(44_100 * 20) / 44_100
-    assert musical.analyze(np.sin(2 * np.pi * hz * t).astype(np.float32), 44_100)["bpm"] is None
+    t = np.arange(musical.RATE * 20) / musical.RATE
+    assert musical.analyze(np.sin(2 * np.pi * hz * t).astype(np.float32), musical.RATE)["bpm"] is None
 
 
 @pytest.mark.parametrize("name, camelot, chords", [
@@ -121,7 +130,7 @@ def test_no_bpm_for_steady_tone(hz):
 ])
 def test_key(name, camelot, chords):
     from freethenoize.audio import musical
-    sr = 44_100
+    sr = musical.RATE
     tt = np.arange(sr * 2) / sr
     tone = lambda f: sum(np.sin(2 * np.pi * f * h * tt) / h for h in (1, 2, 3, 4))
     x = np.concatenate([sum(tone(220 * 2 ** ((n - 9) / 12)) for n in c) for c in chords * 6])
@@ -132,8 +141,7 @@ def test_key(name, camelot, chords):
 @pytest.mark.skipif(not FFMPEG, reason="needs ffmpeg")
 @pytest.mark.parametrize("ext", ["mp3", "flac", "m4a", "aiff"])
 def test_bpm_key_tags_roundtrip(tmp_path, ext):
-    path = tmp_path / f"t.{ext}"
-    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", "sine=d=1", str(path)], check=True)
+    path = make_audio(tmp_path / f"t.{ext}")
     assert tagging.write_tags(path, {"title": "x", "bpm": 127.6, "key": "F#m"})
     got, _ = tagging.read_tags(path)
     assert got["bpm"] == "128" and got["key"] == "F#m"
@@ -227,3 +235,29 @@ def test_source_of_checks_the_real_hostname():
                  "https://notyoutube.com/watch", "https://youtube.com.evil.com/x",
                  "https://user@evil.com/soundcloud.com", "http://[::1/x", ""):
         assert source_of(trap) == "other", trap
+
+
+def _image(tmp_path, w, h, ext):
+    png = make_png(w, h)
+    if ext == "png":
+        return png
+    src, out = tmp_path / "img.png", tmp_path / f"img.{ext}"
+    src.write_bytes(png)
+    if ffmpeg.run(["-v", "error", "-i", str(src), str(out)]).returncode != 0:
+        pytest.skip(f"this ffmpeg cannot write {ext} images")
+    return out.read_bytes()
+
+
+@pytest.mark.skipif(not FFMPEG, reason="needs ffmpeg")
+@pytest.mark.parametrize("ext", ["png", "jpg", "webp"])
+def test_shrink_cover(tmp_path, ext):
+    big = _image(tmp_path, 3000, 2000, ext)
+    small = tagging.shrink_cover(big, 1400)
+    assert tagging.jpeg_size(small) == (1400, 933)
+    assert tagging.shrink_cover(small, 1400) is small  # already fine: untouched
+
+
+@pytest.mark.skipif(not FFMPEG, reason="needs ffmpeg")
+def test_shrink_cover_rejects_garbage():
+    with pytest.raises(ValueError):
+        tagging.shrink_cover(b"not an image", 500)

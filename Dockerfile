@@ -1,5 +1,12 @@
 FROM python:3.13-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+# The audio-only ffmpeg pinned in packaging/ffmpeg/assets.txt (~4 MB, hash
+# checked). Until a build is pinned for this architecture (exit 3), Debian's
+# ffmpeg, which brings ~300 MB of libraries. Any other failure stops the build.
+COPY packaging/ffmpeg/fetch.py packaging/ffmpeg/assets.txt /tmp/ffmpeg/
+RUN python /tmp/ffmpeg/fetch.py /usr/local/bin \
+    || { [ $? = 3 ] && apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+         && rm -rf /var/lib/apt/lists/*; } \
+    && rm -rf /tmp/ffmpeg
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY freethenoize ./freethenoize

@@ -1,6 +1,9 @@
 """ITU-R BS.1770-4 loudness, EBU R128 loudness range, true peak."""
+from functools import lru_cache
+
 import numpy as np
-from scipy import signal
+
+from . import dsp
 
 
 def _biquad_shelf(sr: int, gain_db: float, q: float, fc: float):
@@ -26,10 +29,16 @@ def _biquad_highpass(sr: int, q: float, fc: float):
     return np.array(b) / den[0], np.array(den) / den[0]
 
 
+@lru_cache(maxsize=4)
+def _k_response(sr: int) -> np.ndarray:
+    # 250 ms of the pre-filter's impulse response; it has decayed below
+    # 1e-25 by then, so filtering with it equals the recursive filter.
+    return dsp.biquad_response([_biquad_shelf(sr, 4.0, 1 / np.sqrt(2), 1500.0),
+                                _biquad_highpass(sr, 0.5, 38.0)], sr // 4)
+
+
 def k_weight(x: np.ndarray, sr: int) -> np.ndarray:
-    b1, a1 = _biquad_shelf(sr, 4.0, 1 / np.sqrt(2), 1500.0)
-    b2, a2 = _biquad_highpass(sr, 0.5, 38.0)
-    return signal.lfilter(b2, a2, signal.lfilter(b1, a1, x, axis=0), axis=0)
+    return dsp.fir_filter(x, _k_response(sr))
 
 
 def _block_loudness(weighted: np.ndarray, sr: int, block_s: float, hop_s: float) -> np.ndarray:
@@ -66,7 +75,7 @@ def measure(x: np.ndarray, sr: int) -> dict:
                 lra = float(np.percentile(s, 95) - np.percentile(s, 10))
 
     sample_peak = float(np.abs(x).max()) if len(x) else 0.0
-    oversampled = signal.resample_poly(x, 4, 1, axis=0) if sr < 176_400 else x
+    oversampled = dsp.upsample(x, 4) if sr < 176_400 else x
     true_peak = float(np.abs(oversampled).max()) if len(x) else 0.0
 
     def db(v):

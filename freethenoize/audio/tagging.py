@@ -4,7 +4,7 @@ ffmpeg cannot put artwork in WAV and gets M4A covers wrong, so all tagging is
 done here instead.
 """
 import base64
-import io
+import struct
 from pathlib import Path
 
 from mutagen import File as MutagenFile
@@ -15,6 +15,8 @@ from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
+
+from .. import ffmpeg
 
 TAG_KEYS = ("title", "artist", "album", "album_artist", "genre", "date", "comment", "url", "bpm", "key")
 
@@ -38,22 +40,36 @@ def image_mime(data: bytes) -> str:
     return "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
 
 
+def jpeg_size(data: bytes) -> tuple[int, int] | None:
+    """(width, height) of a JPEG from its frame header; None if not a JPEG."""
+    if data[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    while i + 9 < len(data):
+        if data[i] != 0xFF:
+            return None
+        marker = data[i + 1]
+        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+            i += 2
+            continue
+        length = struct.unpack(">H", data[i + 2:i + 4])[0]
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            h, w = struct.unpack(">HH", data[i + 5:i + 9])
+            return w, h
+        i += 2 + length
+    return None
+
+
 def shrink_cover(data: bytes, max_px: int) -> bytes:
     """Resize to max_px on the long side and re-encode as JPEG.
 
     SoundCloud "original" artwork can be a 3000px 10 MB PNG; embedding that in
     every file makes DJ software choke.
     """
-    from PIL import Image
-
-    with Image.open(io.BytesIO(data)) as img:
-        if max(img.size) <= max_px and image_mime(data) == "image/jpeg":
-            return data
-        img = img.convert("RGB")
-        img.thumbnail((max_px, max_px), Image.LANCZOS)
-        out = io.BytesIO()
-        img.save(out, "JPEG", quality=92, optimize=True)
-        return out.getvalue()
+    size = jpeg_size(data)
+    if size and max(size) <= max_px:
+        return data
+    return ffmpeg.to_jpeg(data, max_px, quality=2)
 
 
 def _text(meta: dict, key: str) -> str | None:
