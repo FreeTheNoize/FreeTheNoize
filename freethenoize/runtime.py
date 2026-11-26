@@ -79,3 +79,13 @@ def unblock_bundled_dlls() -> None:
                     os.remove(os.path.join(root, name) + ":Zone.Identifier")
                 except OSError:
                     pass  # not marked, or read-only install: nothing to do
+
+
+def alert(title: str, text: str) -> None:
+    """Tell the user, even without a terminal (Windows message box)."""
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, text, title, 0x10 | 0x10000)  # MB_ICONERROR | MB_SETFOREGROUND
+    else:
+        print(f"{title}: {text}", file=sys.stderr)

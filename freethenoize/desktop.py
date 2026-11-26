@@ -4,6 +4,7 @@ The page talks to the same HTTP API as in a browser. pywebview's js_api is
 used only for what a browser cannot do: native file dialogs, "show in
 folder" and the SoundCloud sign-in window.
 """
+import json
 import os
 import socket
 import subprocess
@@ -11,6 +12,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+from .paths import DATA_DIR
 
 AUDIO_TYPES = ("Audio (*.wav;*.flac;*.aif;*.aiff;*.mp3;*.m4a;*.aac;*.opus;*.ogg)", "Todos (*.*)")
 
@@ -79,6 +82,47 @@ class NativeBridge:
         return self._core.soundcloud_status()
 
 
+GEOMETRY_FILE = DATA_DIR / "window.json"
+
+
+def _load_geometry() -> dict:
+    """Last window size; no file yet (first launch) = maximized."""
+    geometry = {"width": 1280, "height": 820, "maximized": True}
+    try:
+        stored = json.loads(GEOMETRY_FILE.read_text(encoding="utf-8"))
+        geometry.update({
+            "width": max(960, int(stored["width"])),
+            "height": max(640, int(stored["height"])),
+            "maximized": bool(stored["maximized"]),
+        })
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return geometry
+
+
+def _track_geometry(window, geometry: dict) -> None:
+    def maximized(*_):
+        geometry["maximized"] = True
+
+    def restored(*_):
+        geometry["maximized"] = False
+
+    def resized(width, height):
+        if not geometry["maximized"]:
+            geometry["width"], geometry["height"] = width, height
+
+    def save(*_):
+        try:
+            GEOMETRY_FILE.write_text(json.dumps(geometry), encoding="utf-8")
+        except OSError:
+            pass
+
+    window.events.maximized += maximized
+    window.events.restored += restored
+    window.events.resized += resized
+    window.events.closing += save
+
+
 def run():
     import logging
 
@@ -95,7 +139,8 @@ def run():
     if not instance.acquire():
         if instance.show_running():
             return 0
-        print("FreeTheNoize ya está abierto, pero no responde.")
+        runtime.alert("FreeTheNoize", "FreeTheNoize ya está abierto, pero no responde.\n\n"
+                      "Ciérralo desde el Administrador de tareas y vuelve a abrirlo.")
         return 1
 
     runtime.unblock_bundled_dlls()  # before pywebview loads .NET (Windows)
@@ -123,16 +168,19 @@ def run():
     step(f"servidor en 127.0.0.1:{port}")
 
     bridge = NativeBridge(core)
+    geometry = _load_geometry()
     window = webview.create_window(
         "FreeTheNoize",
         f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}",
         js_api=bridge,
-        width=1280,
-        height=820,
+        width=geometry["width"],
+        height=geometry["height"],
+        maximized=geometry["maximized"],  # maximized the first time
         min_size=(960, 640),
         background_color="#0a0a0a",
     )
     bridge._window = window
+    _track_geometry(window, geometry)
     window.events.shown += lambda *_: step("ventana visible")
     window.events.loaded += lambda *_: step("interfaz cargada")
     from . import popups
@@ -159,7 +207,10 @@ def run():
         # loads it with System.Drawing.Icon, which rejects a PNG and kills the
         # process from .NET; the window takes the exe's icon there anyway.
         icon = str(Path(__file__).parent / "ui" / "icon-512.png") if sys.platform.startswith("linux") else None
-        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False, icon=icon)
+        # WebView2/WebKit profile inside our data dir (default: a pywebview
+        # folder shared by every pywebview app), so uninstall can remove it.
+        webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False, icon=icon,
+                      storage_path=str(DATA_DIR / "webview"))
     except Exception as exc:
         log.exception("no se pudo abrir la ventana")
         # No usable GUI backend (e.g. a Linux box without Qt/GTK libraries):

@@ -22,11 +22,15 @@ from .paths import DATA_DIR
 INFO_FILE = DATA_DIR / "instance.json"
 _LOCK_FILE = DATA_DIR / "desktop.lock"
 _held = None  # keeps the mutex handle / lock file open for the process lifetime
+# Fixed name the Windows installer checks (AppMutex in freethenoize.iss) to ask
+# for the app to be closed before replacing or removing its files.
+APP_MUTEX = "FreeTheNoizeApp"
+_app_mutex = None
 
 
 def acquire() -> bool:
     """True if this is the only desktop instance for this data dir."""
-    global _held
+    global _held, _app_mutex
     if sys.platform == "win32":
         import ctypes
 
@@ -40,6 +44,7 @@ def acquire() -> bool:
             kernel32.CloseHandle(ctypes.c_void_p(handle))
             return False
         _held = handle
+        _app_mutex = kernel32.CreateMutexW(None, False, APP_MUTEX)
         return True
     import fcntl
 
