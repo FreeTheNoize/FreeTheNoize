@@ -134,6 +134,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
           Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          # A marked file opened through the shell shows "Do you want to run this file?"
+          # and waits for a click nobody gives on CI. Skip only that prompt; the mark
+          # stays, so the check that installed files are unmarked still means something.
+          $env:SEE_MASK_NOZONECHECKS = '1'
           $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
           function Run([string]$exe, [string[]]$argv, [string]$what) {
             "== $what"
