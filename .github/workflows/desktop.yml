@@ -73,25 +73,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: dist\FreeTheNoize\ftn.exe --version
-      # Explorer marks every file extracted from a downloaded zip (Zone.Identifier);
-      # .NET then refuses pythonnet/WebView2 and the app fell back to the browser.
-      - name: Native window with downloaded-zip marks (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-ChildItem dist\FreeTheNoize -Recurse -Include *.dll | ForEach-Object {
-            Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
-          }
-          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-motw"
-          $log = "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log"
-          Remove-Item $log -ErrorAction SilentlyContinue
-          $p = Start-Process dist\FreeTheNoize\FreeTheNoize.exe -PassThru
-          Start-Sleep 40
-          $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
-          Stop-Process $p -Force -ErrorAction SilentlyContinue
-          $text
-          if ($text -match "No se pudo abrir la ventana|Failed to resolve") { "native window failed"; exit 1 }
-          if ($p.HasExited -and $p.ExitCode -ne $null -and $p.ExitCode -ne -1) { "app exited ($($p.ExitCode))"; exit 1 }
       - name: Qt window backend is bundled (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -111,6 +92,31 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           compression-level: 0
+
+      # Explorer marks every file extracted from a downloaded zip (Zone.Identifier);
+      # .NET then refuses pythonnet/WebView2 and the app fell back to the browser.
+      - name: Native window with downloaded-zip marks (Windows)
+        if: runner.os == 'Windows'
+        # Runs after the upload so the zip is there to test by hand if it fails.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\FreeTheNoize -Recurse -Include *.dll | ForEach-Object {
+            Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-motw"
+          $log = "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $p = Start-Process dist\FreeTheNoize\FreeTheNoize.exe -PassThru
+          Start-Sleep 40
+          $exited = $p.HasExited
+          $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
+          if (-not $exited) { Stop-Process $p -Force -ErrorAction SilentlyContinue }
+          $text
+          Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='.NET Runtime','Application Error'; StartTime=(Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.Message }
+          if ($text -match "No se pudo abrir la ventana|Failed to resolve") { "native window failed"; exit 1 }
+          if ($exited) { "app exited ($('0x{0:X8}' -f $p.ExitCode))"; exit 1 }
 
   attach:
     name: Attach to release
