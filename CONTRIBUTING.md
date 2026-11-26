@@ -10,6 +10,8 @@ Lee también el [código de conducta](CODE_OF_CONDUCT.md) y [cómo se toman las 
   [Discussion](../../discussions) o un issue para hablarlo. Evita que trabajes en algo que luego no encaje.
 - **Fallos de seguridad**: nunca en un issue público. Mira [SECURITY.md](SECURITY.md).
 - Busca primero si ya existe. Los issues con `good first issue` son buen punto de entrada.
+- Mira el [Roadmap](https://github.com/orgs/FreeTheNoize/projects/1): cada punto es un issue con su versión (milestone).
+  Si quieres coger uno, coméntalo en el issue y enlaza la PR con `Closes #N`.
 
 ## Ramas
 
