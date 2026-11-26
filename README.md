@@ -36,7 +36,7 @@ Funciona como **app de escritorio** (macOS Apple Silicon e Intel, Windows, Linux
 
 ## Escritorio
 
-Descarga la build de [Releases](https://github.com/FreeTheNoize/FreeTheNoize/releases/latest) o, desde el código:
+Descarga la build de [Releases](https://github.com/FreeTheNoize/FreeTheNoize/releases/latest) (sin firmar: mira [Verificar las descargas](#verificar-las-descargas)) o, desde el código:
 
 ```sh
 uv venv && uv pip install -e ".[desktop,dev]"
@@ -71,6 +71,37 @@ Sin Docker: `freethenoize serve --host 0.0.0.0 --port 8765 --music-dir ~/Música
 | `FTN_TRUSTED_PROXIES` | IPs de tu proxy inverso, para que respete `X-Forwarded-*`. |
 
 En modo servicio solo se puede abrir lo que hay en la carpeta de música y lo que subas desde el navegador (arrastrar archivos funciona). Los resultados se descargan al dispositivo. Para exponerlo fuera de casa, ponlo detrás de un proxy con HTTPS (Caddy, Traefik, Tailscale…).
+
+## Verificar las descargas
+
+Las apps de escritorio **no están firmadas** por Apple ni con un certificado de Windows: el proyecto no paga cuentas de
+desarrollador. Lo que sí puedes comprobar es que cada archivo sale, sin tocar, del CI de este repositorio.
+
+**Qué esperar al abrirlas la primera vez:**
+
+- **Windows:** SmartScreen dice «Windows protegió su PC». Pulsa **Más información** → **Ejecutar de todas formas**.
+- **macOS:** dice que no puede comprobar el desarrollador. Ve a **Ajustes del Sistema → Privacidad y seguridad** y pulsa
+  **Abrir igualmente** (solo la primera vez). La app va firmada *ad hoc*, sin notarizar; más ayuda en el `LEEME` del DMG.
+
+**Cómo comprobarlas:**
+
+```sh
+# Suma SHA-256: cada release trae SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt --ignore-missing          # macOS: shasum -a 256 -c …
+
+# Procedencia: lo construyó el CI de FreeTheNoize/FreeTheNoize (CLI de GitHub)
+gh attestation verify FreeTheNoize-Windows-x64-Setup.exe -R FreeTheNoize/FreeTheNoize
+```
+
+**La vía verificada de punta a punta es Docker / servidor.** La imagen va firmada con Sigstore (sin claves, con la identidad
+del workflow que la construye) y lleva atestación de procedencia:
+
+```sh
+cosign verify ghcr.io/freethenoize/freethenoize:latest \
+  --certificate-identity-regexp '^https://github.com/FreeTheNoize/FreeTheNoize/\.github/workflows/docker\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/freethenoize/freethenoize:latest -R FreeTheNoize/FreeTheNoize
+```
 
 ## Terminal
 
