@@ -80,7 +80,16 @@ class NativeBridge:
 
 
 def run():
-    from . import instance, runtime
+    import logging
+
+    from . import instance, logs, runtime
+
+    log = logging.getLogger("freethenoize.desktop")
+    t0 = time.monotonic()
+
+    def step(what):
+        log.info("arranque %5.2fs  %s", time.monotonic() - t0, what)
+
 
     # Already open: bring that window to the front instead of a second app.
     if not instance.acquire():
@@ -90,6 +99,7 @@ def run():
         return 1
 
     runtime.unblock_bundled_dlls()  # before pywebview loads .NET (Windows)
+    step("instancia única + DLL desbloqueadas")
 
     import uvicorn
     import webview
@@ -97,6 +107,7 @@ def run():
     from .core import Core
     from .web import Auth, create_app
 
+    step("imports")
     core = Core()
     core.start()
     auth = Auth(password=None, desktop=True)
@@ -105,10 +116,11 @@ def run():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", lifespan="off"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level=logs.uvicorn_level(), lifespan="off"))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.02)
+    step(f"servidor en 127.0.0.1:{port}")
 
     bridge = NativeBridge(core)
     window = webview.create_window(
@@ -121,6 +133,8 @@ def run():
         background_color="#0a0a0a",
     )
     bridge._window = window
+    window.events.shown += lambda *_: step("ventana visible")
+    window.events.loaded += lambda *_: step("interfaz cargada")
     from . import popups
 
     url = f"http://127.0.0.1:{port}/auth/desktop?key={auth.desktop_key}"
@@ -139,10 +153,12 @@ def run():
 
     instance.serve(on_show)
     popups.install()
+    step("ventana creada, arrancando el motor web")
     try:
         webview.start(debug=os.environ.get("FTN_DEBUG") == "1", private_mode=False,
                       icon=str(Path(__file__).parent / "ui" / "icon-512.png"))
     except Exception as exc:
+        log.exception("no se pudo abrir la ventana")
         # No usable GUI backend (e.g. a Linux box without Qt/GTK libraries):
         # keep the server running and use the default browser instead.
         import webbrowser

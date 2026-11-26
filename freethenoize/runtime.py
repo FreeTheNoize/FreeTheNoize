@@ -27,28 +27,56 @@ def is_server() -> bool:
     return _mode == "server"
 
 
+_redirected = False
+
+
+def streams_redirected() -> bool:
+    """True when stdout/stderr point to output.log instead of a terminal."""
+    return _redirected
+
+
+def _attach_parent_console() -> bool:
+    """Windows: use the console of the cmd/PowerShell that launched us, if any."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    if not ctypes.windll.kernel32.AttachConsole(-1):  # ATTACH_PARENT_PROCESS
+        return False
+    try:
+        out = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+    except OSError:
+        return False
+    sys.stdout = sys.stdout or out
+    sys.stderr = sys.stderr or out
+    return True
+
+
 def ensure_std_streams() -> None:
     """Give the process a stdout/stderr when it has none.
 
-    A windowed build (PyInstaller console=False) started from Explorer on
-    Windows gets sys.stdout/sys.stderr = None. uvicorn's log formatter calls
-    sys.stdout.isatty() and the app dies before the window opens, without a
-    message. Point the missing streams to a log file so it starts and leaves
-    a trace to debug with.
+    A windowed build (PyInstaller console=False) gets sys.stdout/sys.stderr =
+    None. uvicorn's log formatter calls sys.stdout.isatty() and the app died
+    before the window opened, without a message. Launched from a terminal it
+    writes there (so -v works); double-clicked, to output.log in the log dir.
     """
+    global _redirected
     if sys.stdout is not None and sys.stderr is not None:
+        return
+    if _attach_parent_console():
         return
     from platformdirs import user_log_path
 
     try:
         log_dir = user_log_path("FreeTheNoize", appauthor=False, ensure_exists=True)
-        stream = open(log_dir / "freethenoize.log", "a", encoding="utf-8", buffering=1)
+        stream = open(log_dir / "output.log", "a", encoding="utf-8", buffering=1)
     except OSError:
         stream = open(os.devnull, "w", encoding="utf-8")
     if sys.stdout is None:
         sys.stdout = stream
     if sys.stderr is None:
         sys.stderr = stream
+    _redirected = True
 
 
 def unblock_bundled_dlls() -> None:
