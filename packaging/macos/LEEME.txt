@@ -1,0 +1,18 @@
+FreeTheNoize para macOS
+=======================
+
+1. Arrastra FreeTheNoize a la carpeta Aplicaciones.
+2. Ábrela desde Aplicaciones o Launchpad.
+
+Si macOS dice que no puede abrirla porque no puede comprobar el desarrollador
+(la app aún no está firmada por Apple):
+
+  - Abre Ajustes del Sistema > Privacidad y seguridad.
+  - Baja hasta "Se ha bloqueado el uso de FreeTheNoize" y pulsa "Abrir igualmente".
+  - Confirma con tu contraseña. Solo hace falta la primera vez.
+
+Si dice que "está dañada", abre Terminal y ejecuta:
+
+  xattr -dr com.apple.quarantine /Applications/FreeTheNoize.app
+
+Más ayuda: https://github.com/FreeTheNoize/FreeTheNoize/issues

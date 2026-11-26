@@ -1,5 +1,5 @@
 # Desktop builds (PyInstaller): macOS Apple Silicon/Intel, Windows x64, Linux x64.
-# On a release (called from release.yml) the zips and the Windows installer are attached to the GitHub release.
+# On a release (called from release.yml) the zips, the Windows installer and the macOS disk images are attached to the GitHub release.
 name: Desktop builds
 on:
   pull_request:
@@ -77,6 +77,28 @@ jobs:
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: cd dist && ditto -c -k --keepParent FreeTheNoize.app ../${{ matrix.artifact }}
+      # The main macOS download: a disk image with "drag to Applications".
+      - name: DMG (macOS)
+        if: runner.os == 'macOS'
+        env:
+          ZIP: ${{ matrix.artifact }}
+        run: |
+          DMG="${ZIP%.zip}.dmg"
+          mkdir -p dmg && cp -R dist/FreeTheNoize.app dmg/ && ln -s /Applications dmg/Aplicaciones
+          cp packaging/macos/LEEME.txt "dmg/Si macOS no deja abrirla.txt"
+          hdiutil create -volname FreeTheNoize -srcfolder dmg -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG"
+          # The image mounts and holds a launchable app.
+          MNT=$(hdiutil attach -nobrowse -readonly "$DMG" | awk -F'\t' '/\/Volumes\//{print $NF}')
+          test -x "$MNT/FreeTheNoize.app/Contents/MacOS/FreeTheNoize"
+          hdiutil detach "$MNT"
+          ls -l "$DMG"
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'macOS'
+        with:
+          name: ${{ env.DMG }}
+          path: ${{ env.DMG }}
+          compression-level: 0
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
@@ -112,6 +134,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
           Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          # A marked file opened through the shell shows "Do you want to run this file?"
+          # and waits for a click nobody gives on CI. Skip only that prompt; the mark
+          # stays, so the check that installed files are unmarked still means something.
+          $env:SEE_MASK_NOZONECHECKS = '1'
           $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
           function Run([string]$exe, [string[]]$argv, [string]$what) {
             "== $what"
@@ -209,13 +235,14 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: (cd dist && sha256sum -- *.zip *.exe > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - run: (cd dist && sha256sum -- *.zip *.exe *.dmg > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.zip
             dist/*.exe
+            dist/*.dmg
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/*.exe dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/*.exe dist/*.dmg dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
