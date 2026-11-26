@@ -39,7 +39,7 @@ jobs:
             if [ "$(uname -m)" = x86_64 ]; then brew install nasm; fi
           else
             sudo apt-get update -q
-            sudo apt-get install -yq --no-install-recommends nasm libssl-dev
+            sudo apt-get install -yq --no-install-recommends nasm libssl-dev pkg-config
             if [ "${{ matrix.target }}" = windows ]; then
               sudo apt-get install -yq --no-install-recommends gcc-mingw-w64-x86-64
             fi

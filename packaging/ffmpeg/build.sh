@@ -29,18 +29,31 @@ DEPS="$WORK/deps"
 mkdir -p "$DEPS" "$WORK/src"
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 
-fetch() {  # url sha256
-  local file="$WORK/src/$(basename "$1")"
-  [ -f "$file" ] || curl -fsSL --retry 3 -o "$file" "$1"
-  echo "$2  $file" | shasum -a 256 -c - >/dev/null
+fetch() {  # name sha256 url [mirror...]: first download whose checksum matches
+  local name=$1 sum=$2 file="$WORK/src/$1" url
+  shift 2
+  for url in "$@"; do
+    if [ -f "$file" ] && echo "$sum  $file" | shasum -a 256 -c - >/dev/null 2>&1; then break; fi
+    curl -fsSL --retry 3 -o "$file" "$url" || true
+  done
+  echo "$sum  $file" | shasum -a 256 -c - >/dev/null || { echo "checksum mismatch: $name" >&2; exit 1; }
   tar -xf "$file" -C "$WORK/src"
 }
 
-fetch "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" "$FFMPEG_SHA256"
-fetch "https://downloads.sourceforge.net/project/lame/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz" "$LAME_SHA256"
-fetch "https://zlib.net/fossils/zlib-$ZLIB_VERSION.tar.gz" "$ZLIB_SHA256"
+# SourceForge mirrors sometimes serve an HTML page: Debian's orig tarball is
+# the same file (same checksum).
+fetch "ffmpeg-$FFMPEG_VERSION.tar.xz" "$FFMPEG_SHA256" \
+  "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+fetch "lame-$LAME_VERSION.tar.gz" "$LAME_SHA256" \
+  "https://downloads.sourceforge.net/project/lame/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz" \
+  "https://deb.debian.org/debian/pool/main/l/lame/lame_$LAME_VERSION.orig.tar.gz"
+fetch "zlib-$ZLIB_VERSION.tar.gz" "$ZLIB_SHA256" \
+  "https://zlib.net/fossils/zlib-$ZLIB_VERSION.tar.gz" \
+  "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz"
 
-CROSS=() HOST=() TLS=() EXE=ffmpeg
+# macOS ships bash 3.2: with `set -u` an empty "${A[@]}" is an error, so
+# arrays are expanded as ${A[@]+"${A[@]}"} below.
+CROSS=() HOST=() TLS=() PKGCONFIG=(--pkg-config=false) EXE=ffmpeg
 case "$TARGET" in
   windows)
     CROSS=(--enable-cross-compile --target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32-)
@@ -54,6 +67,7 @@ case "$TARGET" in
       TLS=(--enable-securetransport)
     else
       TLS=(--enable-openssl)  # needs libssl-dev to build, libssl3 to run
+      PKGCONFIG=(--pkg-config=pkg-config)  # --enable-gpl needs OpenSSL >= 3, checked via pkg-config
     fi ;;
   *) echo "unknown target $TARGET" >&2; exit 2 ;;
 esac
@@ -75,7 +89,7 @@ esac
 (
   cd "$WORK/src/lame-$LAME_VERSION"
   sed -i.bak '/lame_init_old/d' include/libmp3lame.sym  # symbol removed upstream; breaks newer linkers
-  CFLAGS="-O2 -fPIC" ./configure "${HOST[@]}" --prefix="$DEPS" --enable-static --disable-shared \
+  CFLAGS="-O2 -fPIC" ./configure ${HOST[@]+"${HOST[@]}"} --prefix="$DEPS" --enable-static --disable-shared \
     --disable-frontend --disable-decoder --disable-gtktest >/dev/null
   make -s -j"$JOBS" install >/dev/null
 )
@@ -94,13 +108,13 @@ FILTERS="aresample,aformat,anull,volume,alimiter,pan,channelmap,amerge,loudnorm,
 BSFS="aac_adtstoasc,null"
 
 cd "$WORK/src/ffmpeg-$FFMPEG_VERSION"
-./configure "${CROSS[@]}" --prefix="$WORK/ffmpeg" \
-  --pkg-config=false --disable-autodetect --enable-gpl --enable-version3 \
+./configure ${CROSS[@]+"${CROSS[@]}"} --prefix="$WORK/ffmpeg" \
+  "${PKGCONFIG[@]}" --disable-autodetect --enable-gpl --enable-version3 \
   --enable-static --disable-shared --enable-small --disable-debug --disable-doc \
   --disable-ffplay --disable-ffprobe --disable-avdevice \
   --disable-everything \
   --enable-avcodec --enable-avformat --enable-avfilter --enable-swresample --enable-swscale \
-  --enable-zlib --enable-libmp3lame "${TLS[@]}" \
+  --enable-zlib --enable-libmp3lame ${TLS[@]+"${TLS[@]}"} \
   --enable-decoder="${DECODERS//$'\n'/}" --enable-encoder="$ENCODERS" \
   --enable-demuxer="${DEMUXERS//$'\n'/}" --enable-muxer="$MUXERS" \
   --enable-parser="$PARSERS" --enable-filter="$FILTERS" --enable-bsf="$BSFS" \
