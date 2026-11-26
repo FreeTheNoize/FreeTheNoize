@@ -116,8 +116,8 @@ jobs:
           function Run([string]$exe, [string[]]$argv, [string]$what) {
             "== $what"
             $p = Start-Process $exe -ArgumentList $argv -PassThru
-            if (-not $p.WaitForExit(240000)) { "$what: still running after 4 min"; Get-Process | Where-Object { $_.Path -like "*FreeTheNoize*" -or $_.Name -like "*unins*" -or $_.Name -like "*Setup*" } | Format-Table Id, Name, Path -AutoSize | Out-String; exit 1 }
-            if ($p.ExitCode) { "$what failed: $($p.ExitCode)"; exit 1 }
+            if (-not $p.WaitForExit(240000)) { "${what}: still running after 4 min"; Get-Process | Where-Object { $_.Path -like "*FreeTheNoize*" -or $_.Name -like "*unins*" -or $_.Name -like "*Setup*" } | Format-Table Id, Name, Path -AutoSize | Out-String; exit 1 }
+            if ($p.ExitCode) { "${what} failed: $($p.ExitCode)"; exit 1 }
           }
           Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=$env:RUNNER_TEMP\setup1.log") 'install'
           if (-not (Test-Path "$app\FreeTheNoize.exe")) { "not installed in $app"; exit 1 }
