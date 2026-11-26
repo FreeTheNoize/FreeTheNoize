@@ -116,12 +116,13 @@ y al aprobarla se publican los zips de escritorio y la imagen Docker. Detalles e
 git clone https://github.com/FreeTheNoize/FreeTheNoize && cd FreeTheNoize   # rama por defecto: develop
 uv venv && uv pip install -e ".[desktop,dev]"
 .venv/bin/python -m pytest
+python tools/check_architecture.py                               # reglas del framework (también en CI)
 .venv/bin/pyinstaller packaging/freethenoize.spec --noconfirm   # build de escritorio
 ```
 
 FreeTheNoize es un **kernel pequeño con complementos**: cada función es una carpeta en `freethenoize/plugins/`
 con su lógica, su API y su pantalla. Para añadir una: `.venv/bin/python tools/new_plugin.py <id>`.
-Cómo encaja todo en [ARCHITECTURE.md](ARCHITECTURE.md); paso a paso en
+Cómo encaja todo en [ARCHITECTURE.md](ARCHITECTURE.md) (y, para agentes, [AGENTS.md](AGENTS.md)); paso a paso en
 [CONTRIBUTING.md › Crear un complemento](CONTRIBUTING.md#crear-un-complemento).
 
 ```

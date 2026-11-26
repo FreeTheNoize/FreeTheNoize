@@ -1,0 +1,5 @@
+---
+description: Reglas del framework de FreeTheNoize (kernel + complementos)
+alwaysApply: true
+---
+Sigue @AGENTS.md (y @ARCHITECTURE.md para el detalle). Comprueba con `python tools/check_architecture.py`.

@@ -78,7 +78,10 @@ pequeño. Una función nueva casi nunca toca el kernel: es una carpeta nueva. Le
 4. **La UI en `ui/<id>.js`** con `FTN.registerView` / `FTN.registerSettings`. Sin build ni librerías externas;
    `innerHTML` solo para plantillas estáticas, el resto con `FTN.h()`.
 5. **Tests** en `tests/test_<id>.py`. `tests/test_plugins.py` ya comprueba el contrato (que se puede
-   desactivar, que no importa otros complementos, que sus rutas y eventos llevan su prefijo…).
+   desactivar, que sus rutas y eventos llevan su prefijo…).
+6. **Comprueba la arquitectura**: `python tools/check_architecture.py`. Dice archivo, línea y qué hacer; el CI
+   lo exige (check *architecture*). Si programas con un agente (Claude Code, Cursor, Copilot…), lee
+   [AGENTS.md](AGENTS.md): en Claude Code el comprobador corre solo tras cada edición.
 
 Reglas que no se negocian:
 
