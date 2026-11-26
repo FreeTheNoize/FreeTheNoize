@@ -3,7 +3,9 @@
 name: Desktop builds
 on:
   pull_request:
-    paths: ["packaging/**", "pyproject.toml", ".github/workflows/desktop.yml"]
+    # The app code too: a frozen build can break where `pytest` can't see it
+    # (e.g. no stdout/stderr in the windowed Windows exe).
+    paths: ["freethenoize/**", "packaging/**", "pyproject.toml", ".github/workflows/desktop.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -54,6 +56,24 @@ jobs:
             sleep 1
           done
           echo "server did not start"; exit 1
+      # Start-Process gives no stdout/stderr, like a double-click in Explorer:
+      # the case the bash smoke test above cannot see.
+      - name: Smoke test (Windows, launched like a double-click)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-dblclick"
+          $p = Start-Process dist\FreeTheNoize\FreeTheNoize.exe -ArgumentList 'serve','--port','8798','--password','x' -PassThru
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://127.0.0.1:8798/api/health | Out-Null; Stop-Process $p -Force; exit 0 } catch { Start-Sleep 1 }
+          }
+          Get-Content "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log" -ErrorAction SilentlyContinue
+          "server did not start without console streams"; exit 1
+      - name: Qt window backend is bundled (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ls dist/FreeTheNoize/_internal/PyQt6/QtWebEngineWidgets*.so dist/FreeTheNoize/_internal/PyQt6/Qt6/lib/libQt6WebEngineCore.so.6
+          du -sh dist/FreeTheNoize
       - name: Zip (macOS)
         if: runner.os == 'macOS'
         run: cd dist && ditto -c -k --keepParent FreeTheNoize.app ../${{ matrix.artifact }}
