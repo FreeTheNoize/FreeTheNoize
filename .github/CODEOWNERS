@@ -1,4 +1,20 @@
 # Cualquier persona de @FreeTheNoize/maintainers o @FreeTheNoize/contributors puede aprobar cualquier cambio.
 # Basta 1 aprobación de alguien distinto de quien abre la PR (nadie aprueba lo suyo).
-# Este fichero hace que GitHub pida revisión a los dos equipos automáticamente.
+# Este fichero hace que GitHub pida revisión a los equipos automáticamente. Gana la ÚLTIMA regla que coincide.
 *  @FreeTheNoize/maintainers @FreeTheNoize/contributors
+
+# Kernel, contrato y reglas del framework: los revisa maintainers (ARCHITECTURE.md).
+/freethenoize/*.py               @FreeTheNoize/maintainers
+/freethenoize/ui/                @FreeTheNoize/maintainers
+/freethenoize/AGENTS.md          @FreeTheNoize/maintainers
+/freethenoize/CLAUDE.md          @FreeTheNoize/maintainers
+/tools/check_architecture.py     @FreeTheNoize/maintainers
+/AGENTS.md                       @FreeTheNoize/maintainers
+/CLAUDE.md                       @FreeTheNoize/maintainers
+/ARCHITECTURE.md                 @FreeTheNoize/maintainers
+/.claude/                        @FreeTheNoize/maintainers
+/.cursor/                        @FreeTheNoize/maintainers
+/.github/                        @FreeTheNoize/maintainers
+
+# Complementos: cualquiera de los dos equipos.
+/freethenoize/plugins/           @FreeTheNoize/maintainers @FreeTheNoize/contributors
