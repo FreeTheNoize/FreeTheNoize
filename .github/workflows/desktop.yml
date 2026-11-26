@@ -43,6 +43,18 @@ jobs:
           python-version: "3.13"
           activate-environment: true
       - run: uv pip install -e ".[desktop,dev]"
+      # ~4 MB instead of imageio-ffmpeg's ~50 MB; see packaging/ffmpeg.
+      - name: Audio-only ffmpeg
+        shell: bash
+        run: |
+          if FF=$(python packaging/ffmpeg/fetch.py "$RUNNER_TEMP/ffmpeg"); then
+            python packaging/ffmpeg/check.py "$FF"
+            echo "FTN_FFMPEG=$FF" >> "$GITHUB_ENV"
+          else
+            code=$?
+            if [ "$code" != 3 ]; then exit "$code"; fi
+            echo "::warning::No audio-only ffmpeg pinned for this platform (packaging/ffmpeg/assets.txt): bundling imageio-ffmpeg's"
+          fi
       - run: pyinstaller packaging/freethenoize.spec --noconfirm
       # Not notarized (no paid Apple account): PyInstaller signs the bundle ad hoc,
       # which Apple Silicon requires to run it at all. Fail if that ever breaks.

@@ -1,5 +1,6 @@
 # PyInstaller spec: desktop app for macOS (.app), Windows and Linux (folder + executable).
 #   pyinstaller packaging/freethenoize.spec --noconfirm
+import os
 import re
 import sys
 from pathlib import Path
@@ -37,8 +38,15 @@ if sys.platform.startswith("linux"):
 datas = [(str(ROOT / "freethenoize" / "ui"), "freethenoize/ui")]
 datas += collect_data_files("freethenoize.plugins")  # each plugin's ui/ (js, css)
 ICON = ROOT / "packaging" / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
-datas += collect_data_files("imageio_ffmpeg")
 binaries = []
+# The audio-only ffmpeg (packaging/ffmpeg, ~4 MB) when the build provides it;
+# otherwise imageio-ffmpeg's full one (~50 MB), e.g. for a local build.
+FFMPEG = os.environ.get("FTN_FFMPEG")
+if FFMPEG:
+    binaries += [(FFMPEG, ".")]
+    excludes += ["imageio_ffmpeg"]
+else:
+    datas += collect_data_files("imageio_ffmpeg")
 
 # Windows: file version resource (Properties > Details). An exe without it looks
 # more suspicious to SmartScreen and antivirus heuristics.

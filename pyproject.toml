@@ -21,6 +21,8 @@ dependencies = [
 desktop = [
     "pywebview>=6.2",
     "pywebview[qt]>=6.2; sys_platform == 'linux'",
+    # ffmpeg for `pip install freethenoize[desktop]`. The packaged apps ship
+    # the audio-only build from packaging/ffmpeg instead.
     "imageio-ffmpeg>=0.6",
 ]
 dev = ["pytest>=9.0", "httpx>=0.28", "pyinstaller>=6.22"]
