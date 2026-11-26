@@ -35,35 +35,16 @@ def streams_redirected() -> bool:
     return _redirected
 
 
-def _attach_parent_console() -> bool:
-    """Windows: use the console of the cmd/PowerShell that launched us, if any."""
-    if sys.platform != "win32":
-        return False
-    import ctypes
-
-    if not ctypes.windll.kernel32.AttachConsole(-1):  # ATTACH_PARENT_PROCESS
-        return False
-    try:
-        out = open("CONOUT$", "w", encoding="utf-8", buffering=1)
-    except OSError:
-        return False
-    sys.stdout = sys.stdout or out
-    sys.stderr = sys.stderr or out
-    return True
-
-
 def ensure_std_streams() -> None:
     """Give the process a stdout/stderr when it has none.
 
     A windowed build (PyInstaller console=False) gets sys.stdout/sys.stderr =
     None. uvicorn's log formatter calls sys.stdout.isatty() and the app died
-    before the window opened, without a message. Launched from a terminal it
-    writes there (so -v works); double-clicked, to output.log in the log dir.
+    before the window opened, without a message. Send them to output.log in
+    the log dir.
     """
     global _redirected
     if sys.stdout is not None and sys.stderr is not None:
-        return
-    if _attach_parent_console():
         return
     from platformdirs import user_log_path
 

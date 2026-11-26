@@ -1,5 +1,5 @@
 # Desktop builds (PyInstaller): macOS Apple Silicon/Intel, Windows x64, Linux x64.
-# On a release (called from release.yml) the zips are attached to the GitHub release.
+# On a release (called from release.yml) the zips and the Windows installer are attached to the GitHub release.
 name: Desktop builds
 on:
   pull_request:
@@ -69,10 +69,6 @@ jobs:
           }
           Get-Content "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log" -ErrorAction SilentlyContinue
           "server did not start without console streams"; exit 1
-      - name: CLI exe (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: dist\FreeTheNoize\ftn.exe --version
       - name: Qt window backend is bundled (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -84,6 +80,56 @@ jobs:
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
+      # The installer is the main Windows download (see packaging/windows/freethenoize.iss).
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path freethenoize/__init__.py -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
+          # WebView2 bootstrapper, only accepted if signed by Microsoft.
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile dist\MicrosoftEdgeWebview2Setup.exe
+          $sig = Get-AuthenticodeSignature dist\MicrosoftEdgeWebview2Setup.exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { "bad WebView2 bootstrapper signature: $($sig.Status) $($sig.SignerCertificate.Subject)"; exit 1 }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp /DAppVersion=$ver /DSourceDir="$PWD\dist\FreeTheNoize" /DWebView2Setup="$PWD\dist\MicrosoftEdgeWebview2Setup.exe" packaging\windows\freethenoize.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Move-Item dist\FreeTheNoize-Windows-x64-Setup.exe .
+          Get-Item FreeTheNoize-Windows-x64-Setup.exe | Select Name, Length
+      # As a user would: downloaded (marked), per-user install without admin,
+      # the installed app starts, upgrade over itself, uninstall cleans up.
+      - name: Installer smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
+          Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
+          function Install { $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait -PassThru; if ($p.ExitCode) { "install failed: $($p.ExitCode)"; exit 1 } }
+          Install
+          if (-not (Test-Path "$app\FreeTheNoize.exe")) { "not installed in $app"; exit 1 }
+          $marked = Get-ChildItem $app -Recurse -File | Get-Item -Stream Zone.Identifier -ErrorAction SilentlyContinue
+          if ($marked) { "installed files carry the download mark:"; $marked.FileName; exit 1 }
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-setup"
+          $p = Start-Process "$app\FreeTheNoize.exe" -ArgumentList 'serve','--port','8796','--password','x' -PassThru
+          $ok = $false
+          foreach ($i in 1..60) { try { Invoke-RestMethod http://127.0.0.1:8796/api/health | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
+          Stop-Process $p -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { "installed app did not start"; exit 1 }
+          Start-Sleep 2
+          Install  # upgrade in place
+          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
+          $p = Start-Process $un.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($p.ExitCode) { "uninstall failed: $($p.ExitCode)"; exit 1 }
+          Start-Sleep 3
+          if (Test-Path "$app\FreeTheNoize.exe") { "uninstall left the app behind"; exit 1 }
+          "installer OK"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'Windows'
+        with:
+          name: FreeTheNoize-Windows-x64-Setup.exe
+          path: FreeTheNoize-Windows-x64-Setup.exe
+          compression-level: 0
       - name: Zip (Linux)
         if: runner.os == 'Linux'
         run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
@@ -132,11 +178,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: (cd dist && sha256sum -- *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - run: (cd dist && sha256sum -- *.zip *.exe > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/*.zip
+          subject-path: |
+            dist/*.zip
+            dist/*.exe
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/*.exe dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"

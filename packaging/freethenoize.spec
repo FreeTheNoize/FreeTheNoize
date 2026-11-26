@@ -58,7 +58,7 @@ if sys.platform == "win32":
     )
 
 a = Analysis(
-    [str(ROOT / "packaging" / "launch.py"), str(ROOT / "packaging" / "cli.py")],
+    [str(ROOT / "packaging" / "launch.py")],
     pathex=[str(ROOT)],
     binaries=binaries,
     datas=datas,
@@ -68,14 +68,8 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-
-def scripts(keep):
-    """Bootstrap scripts + one entry point (the Analysis has two)."""
-    return [s for s in a.scripts if s[0] not in ("launch", "cli") or s[0] == keep]
-
-
 exe = EXE(
-    pyz, scripts("launch"), [],
+    pyz, a.scripts, [],
     exclude_binaries=True,
     name=APP,
     console=False,
@@ -83,18 +77,7 @@ exe = EXE(
     icon=str(ICON),
     version=version_file,
 )
-# Command line: `ftn get URL`, `ftn serve`. On Windows the app exe has no
-# console, so a second, console exe is the only way to see the output.
-cli = EXE(
-    pyz, scripts("cli"), [],
-    exclude_binaries=True,
-    name="ftn",
-    console=True,
-    upx=False,
-    icon=str(ICON),
-    version=version_file,
-)
-coll = COLLECT(exe, cli, a.binaries, a.datas, name=APP, upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name=APP, upx=False)
 
 if sys.platform == "darwin":
     app = BUNDLE(

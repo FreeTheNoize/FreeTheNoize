@@ -1,8 +1,8 @@
 """Logging for every entry point (app, serve, get).
 
-- Console (stderr): warnings by default, -v info, -vv debug, -q errors only.
-- File: always, so a user can attach it to a bug report. Default
-  <user log dir>/freethenoize.log (rotated), or --log-file PATH.
+- Console (stderr): warnings, when there is a terminal.
+- File: always, so a user can attach it to a bug report:
+  <user log dir>/freethenoize.log, rotated.
 """
 import logging
 import logging.handlers
