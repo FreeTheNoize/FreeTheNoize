@@ -4,6 +4,8 @@
   "release-type": "python",
   "include-v-in-tag": true,
   "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
   "pull-request-title-pattern": "chore: release ${version}",
   "pull-request-header": "Release propuesto por release-please. **Revísalo** (versión y CHANGELOG) y apruébalo: al fusionarlo se crean la etiqueta, la release, las builds de escritorio y la imagen Docker.",
   "changelog-sections": [
