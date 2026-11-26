@@ -151,3 +151,24 @@ def test_update_version_compare_and_asset():
     assert updates.version_tuple("v3.1.0") > updates.version_tuple("3.0.12") > updates.version_tuple("3.0.4")
     assert updates.version_tuple("3.0") == (3, 0, 0)
     assert updates.asset_name() is None or updates.asset_name().startswith("FreeTheNoize-")
+
+
+def test_windowed_build_without_std_streams_starts(monkeypatch, tmp_path):
+    """Double-click on Windows: no stdout/stderr. uvicorn must still configure logging."""
+    import platformdirs
+    import sys
+
+    import uvicorn
+
+    from freethenoize import runtime
+
+    monkeypatch.setattr(platformdirs, "user_log_path", lambda *a, **k: tmp_path)
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    runtime.ensure_std_streams()
+    try:
+        uvicorn.Config(lambda *a: None, log_level="warning", lifespan="off")
+        print("hola")
+    finally:
+        sys.stdout.close()
+    assert (tmp_path / "freethenoize.log").read_text(encoding="utf-8") == "hola\n"
