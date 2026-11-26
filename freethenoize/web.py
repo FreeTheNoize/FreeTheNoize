@@ -200,9 +200,11 @@ def create_app(kernel: Kernel, auth: Auth) -> FastAPI:
     def upload(file: UploadFile = File(...)):
         return kernel.save_upload(file.filename, file.file)
 
+    # LibraryPath already validated these; check again right at the file
+    # sink so the sandbox does not depend on the validator being wired up.
     @app.get("/api/stream")
     def stream_file(path: LibraryPath):
-        return FileResponse(path)
+        return FileResponse(kernel.check_path(path))
 
     @app.get("/api/playable")
     def playable(path: LibraryPath):
@@ -210,9 +212,10 @@ def create_app(kernel: Kernel, auth: Auth) -> FastAPI:
 
     @app.get("/api/files/download")
     def download_file(path: LibraryPath):
-        if not path.is_file():
+        safe = kernel.check_path(path)
+        if not safe.is_file():
             raise HTTPException(404)
-        return FileResponse(path, filename=path.name)
+        return FileResponse(safe, filename=safe.name)
 
     @app.get("/api/audio/{name}")
     def audio(name: str):

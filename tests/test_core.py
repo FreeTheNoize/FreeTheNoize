@@ -199,3 +199,19 @@ def test_single_desktop_instance(monkeypatch, tmp_path):
         assert shown.wait(2)
     finally:
         instance._held = held
+
+
+def test_source_of_checks_the_real_hostname():
+    from freethenoize.ytdlp import source_of
+
+    assert source_of("https://soundcloud.com/a/b") == "soundcloud"
+    assert source_of("https://m.soundcloud.com/a/b") == "soundcloud"
+    assert source_of("https://on.soundcloud.com/x") == "soundcloud"
+    assert source_of("https://snd.sc/x") == "soundcloud"
+    assert source_of("https://www.youtube.com/watch?v=1") == "youtube"
+    assert source_of("https://youtu.be/1") == "youtube"
+    for trap in ("https://evil.com/?soundcloud.com", "https://soundcloud.com.evil.com/a",
+                 "https://evilsoundcloud.com/a", "https://evil.com/soundcloud.com/a",
+                 "https://notyoutube.com/watch", "https://youtube.com.evil.com/x",
+                 "https://user@evil.com/soundcloud.com", "http://[::1/x", ""):
+        assert source_of(trap) == "other", trap

@@ -107,11 +107,20 @@ def update() -> dict:
 
 # ── Parameters shared by every plugin ────────────────────────────────────────
 
+def _on_domain(host: str, domain: str) -> bool:
+    return host == domain or host.endswith("." + domain)
+
+
 def source_of(url: str) -> str:
-    host = (urlparse(url).hostname or "").lower()
-    if host.endswith("soundcloud.com") or host == "snd.sc":
+    """Which site a URL belongs to, by its real hostname (not a substring:
+    evil.com/?soundcloud.com and soundcloud.com.evil.com are "other")."""
+    try:
+        host = (urlparse(url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return "other"
+    if _on_domain(host, "soundcloud.com") or host == "snd.sc":
         return "soundcloud"
-    if host.endswith("youtube.com") or host == "youtu.be":
+    if _on_domain(host, "youtube.com") or host == "youtu.be":
         return "youtube"
     return "other"
 

@@ -195,7 +195,7 @@ class Kernel:
     def roots(self) -> list[Path]:
         return [Path(self.settings["download_dir"]).expanduser().resolve(), paths.UPLOAD_DIR.resolve()]
 
-    def check_path(self, raw: str, must_exist: bool = True) -> Path:
+    def check_path(self, raw: str | Path, must_exist: bool = True) -> Path:
         """Validate a path coming from the page. On a server it must live in
         the music folder or the upload area."""
         if not raw:

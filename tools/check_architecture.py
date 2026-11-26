@@ -331,6 +331,10 @@ def check(files: list[Path] | None = None, root: Path = ROOT) -> list[Violation]
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    # Windows consoles default to cp1252, which can't print "→" or accents.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     hook = "--hook" in argv
     if hook:
         try:
