@@ -1,5 +1,5 @@
 # Desktop builds (PyInstaller): macOS Apple Silicon/Intel, Windows x64, Linux x64.
-# On a release (called from release.yml) the zips are attached to the GitHub release.
+# On a release (called from release.yml) the zips and the Windows installer are attached to the GitHub release.
 name: Desktop builds
 on:
   pull_request:
@@ -80,6 +80,87 @@ jobs:
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path dist/FreeTheNoize -DestinationPath ${{ matrix.artifact }}
+      # The installer is the main Windows download (see packaging/windows/freethenoize.iss).
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path freethenoize/__init__.py -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
+          # WebView2 bootstrapper, only accepted if signed by Microsoft.
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile dist\MicrosoftEdgeWebview2Setup.exe
+          $sig = Get-AuthenticodeSignature dist\MicrosoftEdgeWebview2Setup.exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { "bad WebView2 bootstrapper signature: $($sig.Status) $($sig.SignerCertificate.Subject)"; exit 1 }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp /DAppVersion=$ver /DSourceDir="$PWD\dist\FreeTheNoize" /DWebView2Setup="$PWD\dist\MicrosoftEdgeWebview2Setup.exe" packaging\windows\freethenoize.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Move-Item dist\FreeTheNoize-Windows-x64-Setup.exe .
+          Get-Item FreeTheNoize-Windows-x64-Setup.exe | Select Name, Length
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'Windows'
+        with:
+          name: FreeTheNoize-Windows-x64-Setup.exe
+          path: FreeTheNoize-Windows-x64-Setup.exe
+          compression-level: 0
+      # As a user would: downloaded (marked), per-user install without admin,
+      # the installed app starts, upgrade over itself, uninstall cleans up.
+      - name: Installer smoke test (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = "$PWD\FreeTheNoize-Windows-x64-Setup.exe"
+          Set-Content -LiteralPath $setup -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          $app = "$env:LOCALAPPDATA\Programs\FreeTheNoize"
+          function Run([string]$exe, [string[]]$argv, [string]$what) {
+            "== $what"
+            $p = Start-Process $exe -ArgumentList $argv -PassThru
+            if (-not $p.WaitForExit(240000)) { "${what}: still running after 4 min"; Get-Process | Where-Object { $_.Path -like "*FreeTheNoize*" -or $_.Name -like "*unins*" -or $_.Name -like "*Setup*" } | Format-Table Id, Name, Path -AutoSize | Out-String; exit 1 }
+            if ($p.ExitCode) { "${what} failed: $($p.ExitCode)"; exit 1 }
+          }
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=$env:RUNNER_TEMP\setup1.log") 'install'
+          if (-not (Test-Path "$app\FreeTheNoize.exe")) { "not installed in $app"; exit 1 }
+          $startLnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\FreeTheNoize.lnk"
+          $deskLnk = "$([Environment]::GetFolderPath('Desktop'))\FreeTheNoize.lnk"
+          $regKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{53AEF833-7AED-4A46-A2C1-DEF78E1A0189}_is1'
+          foreach ($f in $startLnk, $deskLnk, $regKey) { if (-not (Test-Path $f)) { "missing after install: $f"; exit 1 } }
+          $marked = Get-ChildItem $app -Recurse -File | ForEach-Object { Get-Item -LiteralPath $_.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue }
+          if ($marked) { "installed files carry the download mark:"; $marked.FileName; exit 1 }
+          "== installed app starts"
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-setup"
+          $p = Start-Process "$app\FreeTheNoize.exe" -ArgumentList 'serve', '--port', '8796', '--password', 'x' -PassThru
+          $ok = $false
+          foreach ($i in 1..60) { try { Invoke-RestMethod http://127.0.0.1:8796/api/health -TimeoutSec 2 | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process FreeTheNoize -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $ok) { "installed app did not start"; exit 1 }
+          Start-Sleep 2
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/LOG=$env:RUNNER_TEMP\setup2.log") 'upgrade in place'
+          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
+          Run $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'uninstall'
+          Start-Sleep 3
+          $left = @($app, $startLnk, $deskLnk, $regKey) | Where-Object { Test-Path $_ }
+          if ($left) { "uninstall left behind:"; $left; exit 1 }
+          # User data stays unless asked (/PURGE=1); the music folder is never touched.
+          $data = "$env:LOCALAPPDATA\FreeTheNoize"
+          New-Item -ItemType Directory "$data\Logs" -Force | Out-Null; Set-Content "$data\settings.json" '{}'
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER') 'reinstall'
+          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
+          Run $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'uninstall keeping data'
+          Start-Sleep 3
+          if (-not (Test-Path "$data\settings.json")) { "uninstall removed user data without /PURGE"; exit 1 }
+          Run $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER') 'reinstall'
+          $un = Get-ChildItem $app -Filter 'unins*.exe' | Select-Object -First 1
+          Run $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/PURGE=1') 'uninstall with /PURGE=1'
+          Start-Sleep 3
+          $left = @($app, $data, $startLnk, $deskLnk, $regKey) | Where-Object { Test-Path $_ }
+          if ($left) { "purge left behind:"; $left; exit 1 }
+          "installer OK"
+      - name: Installer logs (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: Get-ChildItem $env:RUNNER_TEMP -Filter 'setup*.log' -ErrorAction SilentlyContinue | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName -Tail 60 }
       - name: Zip (Linux)
         if: runner.os == 'Linux'
         run: cd dist && zip -qry ../${{ matrix.artifact }} FreeTheNoize
@@ -88,6 +169,31 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           compression-level: 0
+
+      # Explorer marks every file extracted from a downloaded zip (Zone.Identifier);
+      # .NET then refuses pythonnet/WebView2 and the app fell back to the browser.
+      - name: Native window with downloaded-zip marks (Windows)
+        if: runner.os == 'Windows'
+        # Runs after the upload so the zip is there to test by hand if it fails.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\FreeTheNoize -Recurse -Include *.dll | ForEach-Object {
+            Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+          $env:FTN_DATA_DIR = "$env:RUNNER_TEMP\ftn-motw"
+          $log = "$env:LOCALAPPDATA\FreeTheNoize\Logs\freethenoize.log"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $p = Start-Process dist\FreeTheNoize\FreeTheNoize.exe -PassThru
+          Start-Sleep 40
+          $exited = $p.HasExited
+          $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
+          if (-not $exited) { Stop-Process $p -Force -ErrorAction SilentlyContinue }
+          $text
+          Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='.NET Runtime','Application Error'; StartTime=(Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.Message }
+          if ($text -match "No se pudo abrir la ventana|Failed to resolve") { "native window failed"; exit 1 }
+          if ($exited) { "app exited ($('0x{0:X8}' -f $p.ExitCode))"; exit 1 }
 
   attach:
     name: Attach to release
@@ -103,11 +209,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: (cd dist && sha256sum -- *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - run: (cd dist && sha256sum -- *.zip *.exe > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/*.zip
+          subject-path: |
+            dist/*.zip
+            dist/*.exe
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "${{ inputs.tag }}" dist/*.zip dist/*.exe dist/SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
