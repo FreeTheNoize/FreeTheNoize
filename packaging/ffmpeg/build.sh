@@ -12,6 +12,7 @@
 #   - stream previews from https/HLS (TLS from the OS: Secure Transport,
 #     SChannel; OpenSSL on Linux, linked dynamically)
 # Adding a format to convert/ or a filter? Add it to the lists below.
+# udp: the TLS code (DTLS) links against it; SChannel fails without it.
 # GPL-2.0-or-later + LAME (LGPL): compatible with the project's GPL-2.0.
 set -euo pipefail
 
@@ -118,7 +119,7 @@ cd "$WORK/src/ffmpeg-$FFMPEG_VERSION"
   --enable-decoder="${DECODERS//$'\n'/}" --enable-encoder="$ENCODERS" \
   --enable-demuxer="${DEMUXERS//$'\n'/}" --enable-muxer="$MUXERS" \
   --enable-parser="$PARSERS" --enable-filter="$FILTERS" --enable-bsf="$BSFS" \
-  --enable-protocol=file,pipe,http,https,tcp,tls,crypto \
+  --enable-protocol=file,pipe,http,https,tcp,tls,crypto,udp \
   --extra-cflags="-I$DEPS/include" --extra-ldflags="-L$DEPS/lib $([ "$TARGET" = windows ] && echo -static)" \
   >"$WORK/configure.log" || { tail -30 ffbuild/config.log; exit 1; }
 make -s -j"$JOBS" >/dev/null
