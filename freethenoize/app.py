@@ -5,6 +5,7 @@
     freethenoize get URL [URL…]  download from the terminal, no UI
 """
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -14,6 +15,8 @@ from . import __version__, runtime
 
 def _serve(args):
     import uvicorn
+
+    from . import logs
 
     from .core import Core
     from .web import Auth, create_app
@@ -26,7 +29,7 @@ def _serve(args):
     app = create_app(core, Auth(password=password, desktop=False))
     print(f"FreeTheNoize {__version__} en http://{args.host}:{args.port}  "
           f"(música: {core.settings['download_dir']})", flush=True)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning",
+    uvicorn.run(app, host=args.host, port=args.port, log_level=logs.uvicorn_level(),
                 proxy_headers=True, forwarded_allow_ips=os.environ.get("FTN_TRUSTED_PROXIES", "127.0.0.1"))
 
 
@@ -104,6 +107,11 @@ def main(argv=None):
             os.environ["FTN_MUSIC_DIR"] = args.music_dir
         if args.data_dir:
             os.environ["FTN_DATA_DIR"] = args.data_dir
+
+    from . import logs
+
+    log_path = logs.setup()
+    logging.getLogger("freethenoize").info("FreeTheNoize %s %s, log %s", __version__, args.cmd or "app", log_path)
 
     from . import ytdlp_loader
 

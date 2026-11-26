@@ -19,6 +19,6 @@
     { "type": "chore", "section": "Varios", "hidden": true }
   ],
   "packages": {
-    ".": { "package-name": "freethenoize" }
+    ".": { "package-name": "freethenoize", "release-as": "0.4.0" }
   }
 }
