@@ -91,3 +91,14 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+      # Keyless Sigstore signature of the pushed image (README › Verificar las descargas):
+      # cosign verify ghcr.io/freethenoize/freethenoize:latest \
+      #   --certificate-identity-regexp '^https://github.com/FreeTheNoize/FreeTheNoize/\.github/workflows/docker\.yml@' \
+      #   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+      - name: Sign the image (cosign, keyless)
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
