@@ -1,10 +1,10 @@
 """Index of the music folder: tags, duration, BPM/key and cover thumbnails."""
 import hashlib
-import io
 import os
 import threading
 from pathlib import Path
 
+from ... import ffmpeg
 from ...audio.tagging import read_tags
 from ...files import AUDIO_EXTS
 
@@ -85,13 +85,8 @@ class Library:
         if not data:
             miss.touch()
             return None
-        from PIL import Image
-
         try:
-            with Image.open(io.BytesIO(data)) as img:
-                img = img.convert("RGB")
-                img.thumbnail((size, size), Image.LANCZOS)
-                img.save(target, "JPEG", quality=85)
+            target.write_bytes(ffmpeg.to_jpeg(data, size, quality=4))
         except Exception:
             miss.touch()
             return None

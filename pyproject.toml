@@ -11,9 +11,7 @@ dependencies = [
     "uvicorn>=0.54",
     "python-multipart>=0.0.20",
     "numpy>=2.0",
-    "scipy>=1.13",
     "mutagen>=1.48",
-    "Pillow>=11.0",
     "platformdirs>=4.3",
     "keyring>=25.0",
 ]

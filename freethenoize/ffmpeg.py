@@ -31,6 +31,18 @@ def require_ffmpeg() -> str:
     return FFMPEG
 
 
+def to_jpeg(data: bytes, max_px: int, quality: int = 2) -> bytes:
+    """Re-encode an image (jpeg, png, webp, gif, bmp) as JPEG, no larger
+    than max_px on its long side. quality: ffmpeg's -q:v, 2 (best) … 31."""
+    box = f"'min(iw,{max_px})':'min(ih,{max_px})'"
+    res = run(["-v", "error", "-i", "pipe:0", "-frames:v", "1",
+               "-vf", f"scale={box}:force_original_aspect_ratio=decrease:flags=lanczos,format=yuvj420p",
+               "-c:v", "mjpeg", "-q:v", str(quality), "-f", "image2pipe", "pipe:1"], input=data)
+    if res.returncode != 0 or not res.stdout:
+        raise ValueError(res.stderr.decode("utf-8", "replace").strip() or "imagen no válida")
+    return res.stdout
+
+
 def run(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(
         [require_ffmpeg(), "-hide_banner", "-nostdin", *args],

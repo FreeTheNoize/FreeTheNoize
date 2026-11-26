@@ -46,7 +46,7 @@ def setup(verbose: int = 0, quiet: bool = False, log_file: str | None = None) ->
     fh.setLevel(logging.DEBUG if verbose >= 2 else logging.INFO)
     fh.setFormatter(logging.Formatter(FORMAT))
     root.addHandler(fh)
-    for noisy in ("urllib3", "PIL", "asyncio", "multipart"):
+    for noisy in ("urllib3", "asyncio", "multipart"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     return path
 

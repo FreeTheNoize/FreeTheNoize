@@ -2,7 +2,8 @@
 import base64
 
 import numpy as np
-from scipy import fft, ndimage, signal
+
+from . import dsp
 
 DB_FLOOR = -120.0
 F_MIN = 20.0
@@ -19,8 +20,8 @@ def spectrogram(mono: np.ndarray, sr: int, width: int = 1600, height: int = 480)
         mono = np.pad(mono, (0, n_fft - len(mono)))
     hop = max(n_fft // 4, (len(mono) - n_fft) // width + 1)
     frames = np.lib.stride_tricks.sliding_window_view(mono, n_fft)[::hop]
-    window = signal.get_window("hann", n_fft).astype(np.float32)
-    mag = np.abs(fft.rfft(frames * window, axis=1, workers=-1)).T  # (bins, time)
+    window = dsp.hann(n_fft).astype(np.float32)
+    mag = np.abs(np.fft.rfft(frames * window, axis=1)).T  # (bins, time)
     db = 20 * np.log10(mag + 1e-12)
     db -= db.max()
     freqs = np.fft.rfftfreq(n_fft, 1 / sr)
@@ -57,7 +58,7 @@ def spectrogram(mono: np.ndarray, sr: int, width: int = 1600, height: int = 480)
 
 
 def average_spectrum(mono: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
-    freqs, psd = signal.welch(mono, sr, nperseg=8192, scaling="spectrum")
+    freqs, psd = dsp.welch_spectrum(mono, sr, nperseg=8192)
     return freqs, 10 * np.log10(psd + 1e-20)
 
 
@@ -73,7 +74,7 @@ _CUTOFF_HINTS = [
 
 def detect_cutoff(mono: np.ndarray, sr: int, lossless_container: bool) -> dict:
     freqs, db = average_spectrum(mono, sr)
-    smooth = ndimage.uniform_filter1d(db, 9, mode="nearest")
+    smooth = dsp.moving_average(db, 9, mode="nearest")
     band = (freqs >= 1000) & (freqs <= 8000)
     reference = float(np.median(smooth[band]))
     threshold = reference - 50

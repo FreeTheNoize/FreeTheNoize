@@ -1,6 +1,7 @@
 """Null test: align two versions, match gain, subtract, measure what is left."""
 import numpy as np
-from scipy import signal
+
+from . import dsp
 
 ALIGN_SECONDS = 30
 MAX_LAG_SECONDS = 10
@@ -12,8 +13,7 @@ def find_offset(a: np.ndarray, b: np.ndarray, sr: int) -> int:
     start = min(len(a), len(b)) // 4 if min(len(a), len(b)) > 2 * seg else 0
     x = a[start:start + seg]
     y = b[start:start + seg]
-    corr = signal.correlate(x, y, mode="full", method="fft")
-    lags = signal.correlation_lags(len(x), len(y), mode="full")
+    lags, corr = dsp.xcorr(x, y)
     limit = int(MAX_LAG_SECONDS * sr)
     sel = np.abs(lags) <= limit
     return int(lags[sel][np.argmax(np.abs(corr[sel]))])

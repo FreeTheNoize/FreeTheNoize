@@ -1,10 +1,11 @@
 """Tempo (BPM) and key estimation, with Camelot notation for DJs.
 
-Plain numpy/scipy, no ML: good on electronic music with a steady beat and a
+Plain numpy, no ML: good on electronic music with a steady beat and a
 clear tonal centre; treat it as a hint on anything else.
 """
 import numpy as np
-from scipy import ndimage, signal
+
+from . import dsp
 
 RATE = 22_050
 HOP = 256  # ≈ 86 frames/s
@@ -24,10 +25,10 @@ _CAMELOT_MINOR = {9: 8, 4: 9, 11: 10, 6: 11, 1: 12, 8: 1, 3: 2, 10: 3, 5: 4, 0: 
 
 
 def _excerpt(mono: np.ndarray, sr: int, seconds: float = 120) -> np.ndarray:
-    """Resample to RATE and keep the middle of the track (skip intro/outro)."""
+    """Keep the middle of the track (skip intro/outro). Input must be at RATE:
+    decode at that rate (decode.decode(path, RATE, 1)) instead of resampling."""
     if sr != RATE:
-        g = np.gcd(int(sr), RATE)
-        mono = signal.resample_poly(mono, RATE // g, int(sr) // g)
+        raise ValueError(f"musical analysis needs {RATE} Hz audio, got {sr}")
     n = int(seconds * RATE)
     if len(mono) > n:
         start = (len(mono) - n) // 2
@@ -53,15 +54,15 @@ def estimate_bpm(x: np.ndarray) -> dict:
     # low tones still make the flux ripple (STFT hop vs. the tone's period),
     # so also require the loudness envelope itself to move.
     env = 20 * np.log10(np.sqrt((mag ** 2).sum(axis=1)) + 1e-9)
-    env_motion = float((env - ndimage.uniform_filter1d(env, 86)).std())
+    env_motion = float((env - dsp.moving_average(env, 86)).std())
     if len(flux) < 4 * 86 or flux.mean() < 0.02 * logm.sum(axis=1).mean() or env_motion < 0.05:
         return {"bpm": None, "confidence": 0.0}
-    flux -= ndimage.uniform_filter1d(flux, 43)  # remove slow trend
+    flux -= dsp.moving_average(flux, 43)  # remove slow trend
     flux = np.maximum(flux, 0)
     flux /= flux.std() + 1e-9
 
     fps = RATE / HOP
-    ac = signal.correlate(flux, flux, mode="full", method="fft")[len(flux) - 1:]
+    ac = dsp.autocorr(flux)
     ac /= ac[0] + 1e-9
     lag_min, lag_max = int(fps * 60 / BPM_MAX), int(fps * 60 / BPM_MIN) + 1
     lags = np.arange(lag_min, min(lag_max, len(ac) - 1))

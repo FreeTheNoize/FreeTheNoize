@@ -5,8 +5,8 @@ import numpy as np
 
 from . import decode
 
-# compare, loudness, musical and spectrum pull in scipy: imported where used,
-# not at startup (it was ~70% of the desktop app's import time).
+# compare, loudness, musical and spectrum are imported where used, not at
+# startup: only the analysis needs them.
 
 ANALYSIS_RATE_CAP = 96_000
 
@@ -29,7 +29,7 @@ def analyze(path: str | Path) -> dict:
         "loudness": loudness.measure(stereo, sr),
         "cutoff": spectrum.detect_cutoff(mono, sr, info["lossless_container"]),
         "spectrogram": spectrum.spectrogram(mono, sr),
-        "musical": musical.analyze(mono, sr),
+        "musical": musical.analyze(decode.decode(path, musical.RATE, channels=1)[:, 0], musical.RATE),
     }
 
 
