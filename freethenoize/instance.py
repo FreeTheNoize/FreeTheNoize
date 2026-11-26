@@ -100,3 +100,21 @@ def show_running() -> bool:
             return s.recv(8) == b"ok"
     except Exception:
         return False
+
+
+def release() -> None:
+    """Let go of the single-instance lock before the process ends (update)."""
+    global _held, _app_mutex
+    if sys.platform == "win32":
+        import ctypes
+
+        for h in (_held, _app_mutex):
+            if h:
+                ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(h))
+    elif _held:
+        _held.close()
+    _held = _app_mutex = None
+    try:
+        INFO_FILE.unlink()
+    except OSError:
+        pass

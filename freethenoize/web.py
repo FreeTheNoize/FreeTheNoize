@@ -252,6 +252,10 @@ def create_app(core: Core, auth: Auth) -> FastAPI:
     def update_download():
         return core.updates.start_download()
 
+    @app.post("/api/update/install")
+    def update_install():
+        return core.updates.install()
+
     @app.post("/api/update/skip")
     def update_skip():
         return core.updates.skip()

@@ -200,6 +200,7 @@ def run():
         window.on_top = False
 
     instance.serve(on_show)
+    core.updates.on_quit = window.destroy  # "install and restart"
     popups.install()
     step("ventana creada, arrancando el motor web")
     try:
@@ -228,3 +229,6 @@ def run():
             pass
     server.should_exit = True
     core.stop()
+    if core.updates.pending_install:
+        instance.release()  # the installer waits for the app to let go
+        core.updates.run_pending_install()
